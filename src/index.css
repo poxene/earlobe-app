@@ -51,7 +51,59 @@ body::before {
     radial-gradient(circle at center, #d4a24e 0 8px, #0a0a0f 9px 22px, transparent 23px),
     repeating-radial-gradient(circle at center, #24242e 0 2px, #101018 3px 7px);
   box-shadow: 0 0 48px rgba(212, 162, 78, 0.22);
-  animation: spin 8s linear infinite;
+}
+
+.attune {
+  position: relative;
+  height: 9rem;
+  width: 9rem;
+  animation: attune-pulse 2.6s ease-in-out infinite;
+}
+
+.attune .record {
+  height: 100%;
+  width: 100%;
+}
+
+.attune-rings {
+  position: absolute;
+  inset: -0.65rem;
+  overflow: visible;
+}
+
+.attune-rings circle {
+  fill: none;
+  stroke: #d4a24e;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 14 18;
+}
+
+.attune-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin 9s linear infinite;
+}
+
+.attune-spin-back {
+  animation-duration: 6s;
+  animation-direction: reverse;
+}
+
+.attune-spin-back circle {
+  stroke: #f0d7a2;
+  stroke-dasharray: 5 16;
+  opacity: 0.85;
+}
+
+@keyframes attune-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 @keyframes fill-bar {
@@ -172,7 +224,8 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .fill-bar,
-  .record,
+  .attune,
+  .attune-spin,
   .eq-on i,
   .level-glow,
   .creature-on,
