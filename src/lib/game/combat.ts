@@ -115,6 +115,27 @@ export function liveMonsterState(input: {
   return { hpMax, hpLeft, fraction: hpMax > 0 ? hpLeft / hpMax : 0 };
 }
 
+//— last.fm has no playhead. the fight clock is time since this encounter spawned, and a later sync must not forget it.
+export function progressOnClock(input: {
+  startedAtMs: number;
+  anchorMs: number;
+  durationMs: number;
+  storedProgressMs: number;
+  nowMs: number;
+}): number {
+  const sinceSpawn = Math.max(0, input.nowMs - input.startedAtMs);
+  const clock = input.anchorMs + sinceSpawn;
+  const capped = input.durationMs > 0 ? Math.min(input.durationMs, clock) : clock;
+  return Math.max(0, input.storedProgressMs, capped);
+}
+
+//— a monster at 0 hp is a kill, including one that died before the halfway mark. leaving early without the kill is the escape.
+export function liveFightOutcome(input: { progressMs: number; anchorMs: number; killMs: number }): Outcome {
+  const fought = Math.max(0, input.progressMs - input.anchorMs);
+  if (Number.isFinite(input.killMs) && fought >= input.killMs) return "victory";
+  return "escaped";
+}
+
 export function ledgerOutcome(echoDepth: number, outcome: Outcome): "victory" | "escaped" | "faded" {
   //— an echo that runs out of song faded with the record. a skip, or a root fight that gets away, is an escape.
   if (outcome === "escaped" && echoDepth > 0) return "faded";
