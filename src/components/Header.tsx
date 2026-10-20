@@ -1,100 +1,35 @@
-import styled from "@emotion/styled";
-import { FC } from "react";
+import { Link } from "react-router-dom";
+import { Logo } from "@/components/Logo";
 
-type Props = {
-  userId: string;
-};
+const LINKS = [
+  { to: "/battle", label: "Battle" },
+  { to: "/", label: "Sheet" },
+  { to: "/codex", label: "Codex" },
+  { to: "/quests", label: "Quests" },
+  { to: "/shop", label: "Shop" },
+  { to: "/party", label: "Party" },
+];
 
-export const Header: FC<Props> = (props) => {
+export function Header({ onLogout, nav = false }: { onLogout?: () => void; nav?: boolean }) {
   return (
-    <HeaderWrapper>
-      <BodyWrapper>
-        <TitleWrapper>
-          <div className="heading">
-            <h2 className="primaryColor">ear</h2>
-            <h2 className="accentColor">lo</h2>
-            <h2 className="primaryColor">.</h2>
-            <h2 className="accentColor">be</h2>
-          </div>
-        </TitleWrapper>
-
-        <div className="loggedIn">
-          <img
-            className="userIcon"
-            src="/user-grey.svg"
-            alt="user icon"
-            width={20}
-            height={20}
-          />
-
-          <p>{props.userId}</p>
-        </div>
-      </BodyWrapper>
-    </HeaderWrapper>
+    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-5 md:px-8">
+      <Link to="/" aria-label="Earlo.be" className="leading-none">
+        <Logo size="sm" />
+      </Link>
+      <div className="flex flex-wrap items-center gap-4">
+        {nav
+          ? LINKS.map((link) => (
+              <Link key={link.to} to={link.to} className="text-sm tracking-wide text-zinc-400 hover:text-zinc-100">
+                {link.label}
+              </Link>
+            ))
+          : null}
+        {onLogout ? (
+          <button type="button" onClick={onLogout} className="text-sm tracking-wide text-zinc-400 hover:text-zinc-100">
+            Sign out
+          </button>
+        ) : null}
+      </div>
+    </header>
   );
-};
-
-const HeaderWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-
-  @media only screen and (max-width: 900px) {
-  }
-`;
-
-const BodyWrapper = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 800px;
-  height: 50px;
-  padding: 0 100px;
-  border-bottom: 1px solid var(--main-copy);
-
-  @media only screen and (max-width: 900px) {
-    height: 60px;
-    width: 100%;
-    padding: 0 30px;
-  }
-
-  .loggedIn {
-    display: flex;
-    letter-spacing: 1px;
-
-    img {
-      position: relative;
-      top: 2px;
-    }
-
-    p {
-      font-weight: 200;
-      margin: 0 0 0 7px;
-    }
-  }
-`;
-
-const TitleWrapper = styled.div`
-  display: flex;
-  position: relative;
-  top: 2px;
-  color: var(--accent);
-  font-family: "Red Hat Display", sans-serif;
-  letter-spacing: 5px;
-  //font-size: 40px;
-  margin: 0 0 8px;
-
-  .heading {
-    display: flex;
-    position: relative;
-    top: 1px;
-    font-size: 18px;
-  }
-
-  .primaryColor {
-    color: var(--primary);
-  }
-
-  .accentColor {
-    color: var(--accent);
-  }
-`;
+}
