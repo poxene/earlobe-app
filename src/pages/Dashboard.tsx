@@ -12,7 +12,6 @@ import { addStats, calculateDps } from "@/lib/game/combat";
 import { fightDps } from "@/lib/game/effects";
 import type { AwaySummary, GameSnapshot, GameToast } from "@/lib/game/snapshot";
 import { nodeById, treeEffects } from "@/lib/game/trees";
-import { varietyFor } from "@/lib/game/varieties";
 import { Header } from "@/components/Header";
 
 export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
@@ -66,7 +65,7 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
       {sync.data?.fight ? (
         <p className="mx-auto mb-4 w-full max-w-5xl px-4 text-sm md:px-8">
           <Link to="/battle" className="text-gold hover:text-gold-2">
-            {varietyFor(sync.data.fight.family, sync.data.fight.trackId).name} is the current fight.
+            {sync.data.fight.trackName} is the current fight.
           </Link>
         </p>
       ) : null}

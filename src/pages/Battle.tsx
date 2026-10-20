@@ -21,7 +21,9 @@ export function BattlePage() {
     <Frame>
       <main className="mx-auto w-full max-w-5xl px-4 pb-16 md:px-8">
         <p className="text-[11px] tracking-[0.35em] text-zinc-500">BATTLE</p>
-        <h1 className="mt-1 font-display text-6xl tracking-wide">{variety?.name ?? "No fight"}</h1>
+        <h1 className="mt-1 text-balance font-display text-5xl leading-none tracking-wide md:text-6xl">
+          {fight?.trackName ?? "No fight"}
+        </h1>
         {fight && variety && sheet ? (
           <Stage
             fight={fight}
@@ -83,48 +85,38 @@ function Stage({
       <div className="relative">
         <div className="grid grid-cols-2 items-end gap-2">
           <div className={`mx-auto w-full max-w-[11rem] ${fight.isPlaying ? "listener-on" : ""}`}>
-          <div
-            className="grid aspect-square grid-cols-2 overflow-hidden"
-            style={{ boxShadow: `0 0 28px ${classColor}66` }}
-          >
-            {sleeves.map((album, index) => (
-              <div key={album?.id ?? `empty-${index}`} className="bg-ink">
-                {album?.imageUrl ? (
-                  <img src={album.imageUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full" style={{ background: `linear-gradient(145deg, ${classColor}, #0a0a0f)` }} />
-                )}
-              </div>
-            ))}
+            <div
+              className="grid aspect-square grid-cols-2 overflow-hidden"
+              style={{ boxShadow: `0 0 28px ${classColor}66` }}
+            >
+              {sleeves.map((album, index) => (
+                <div key={album?.id ?? `empty-${index}`} className="bg-ink">
+                  {album?.imageUrl ? (
+                    <img src={album.imageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full" style={{ background: `linear-gradient(145deg, ${classColor}, #0a0a0f)` }} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 truncate text-center font-display text-3xl tracking-wide">{listenerName}</p>
+            <p className="truncate text-center text-xs tracking-[0.16em]" style={{ color: classColor }}>
+              {className.toUpperCase()}
+            </p>
           </div>
-          <p className="mt-3 truncate text-center font-display text-3xl tracking-wide">{listenerName}</p>
-          <p className="text-center text-xs tracking-[0.16em]" style={{ color: classColor }}>
-            {className.toUpperCase()}
-          </p>
+          <div className="mx-auto w-full max-w-[12rem]">
+            <div className={`h-56 ${fight.isPlaying ? "creature creature-on" : "creature"}`}>
+              <MonsterFigure recipe={recipe} color={fight.color} echo={fight.echoDepth > 0} title={fight.trackName} />
+            </div>
+            <p className="mt-3 truncate text-center font-display text-3xl tracking-wide">{fight.trackName}</p>
+            <p className="truncate text-center text-xs tracking-[0.16em]" style={{ color: fight.color }}>
+              {varietyName.toUpperCase()}
+              {canon !== varietyName ? <span className="text-zinc-500"> · {canon.toUpperCase()}</span> : null}
+              {fight.echoDepth > 0 ? <span className="text-zinc-500"> · ECHO {fight.echoDepth}</span> : null}
+            </p>
+          </div>
         </div>
-        <div className={`mx-auto h-56 w-full max-w-[12rem] ${fight.isPlaying ? "creature creature-on" : "creature"}`}>
-          <MonsterFigure recipe={recipe} color={fight.color} echo={fight.echoDepth > 0} title={varietyName} />
-        </div>
-      </div>
-      <div className={`strike ${fight.isPlaying ? "strike-on" : ""}`} style={{ ["--strike" as string]: fight.color }} />
-      </div>
-      <div className="relative mt-4 flex items-center justify-center gap-3 px-4">
-        {fight.albumImageUrl ? (
-          <img
-            src={fight.albumImageUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 object-cover"
-            style={{ boxShadow: `0 0 0 1px ${fight.color}` }}
-          />
-        ) : null}
-        <div className="min-w-0 text-left">
-          <p className="text-sm text-zinc-300">
-            <span style={{ color: fight.color }}>{varietyName}</span>
-            <span className="text-zinc-500"> · {canon}</span>
-            {fight.echoDepth > 0 ? <span className="text-zinc-500"> · echo {fight.echoDepth}</span> : null}
-          </p>
-          <p className="truncate text-xs text-zinc-500">{fight.trackName}</p>
-        </div>
+        <div className={`strike ${fight.isPlaying ? "strike-on" : ""}`} style={{ ["--strike" as string]: fight.color }} />
       </div>
     </section>
   );
