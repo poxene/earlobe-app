@@ -1,26 +1,33 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import Root from "./routes/Root.tsx";
-import { ErrorPage } from "./components/ErrorPage.tsx";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { App } from "@/App";
+import "@/index.css";
 
-import "./index.css";
+//— the dev server is pinned to the loopback ip so the session cookie and the API origin match
+if (window.location.hostname === "localhost") {
+  const port = window.location.port || "5173";
+  window.location.replace(
+    `http://127.0.0.1:${port}${window.location.pathname}${window.location.search}${window.location.hash}`,
+  );
+}
 
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Root />,
-    errorElement: <ErrorPage />,
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false },
   },
+});
 
-  // {
-  //   path: "profile/",
-  //   element: <ProfilePage />,
-  // },
-]);
+const root = document.getElementById("root");
+if (!root) throw new Error("missing root");
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>
+createRoot(root).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>,
 );

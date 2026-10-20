@@ -1,0 +1,18 @@
+# The session cookie is set on earlo.be. Netlify forwards these paths to the API.
+[[redirects]]
+  from = "/api/*"
+  to = "https://earlobe-app.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/auth/*"
+  to = "https://earlobe-app.onrender.com/auth/:splat"
+  status = 200
+  force = true
+
+# Client routes such as /battle have no file of their own.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
