@@ -1,0 +1,1 @@
+-- no seed rows. characters are created on the first last.fm login.
