@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { liveFightOutcome, monsterHp, progressOnClock, resolveChain, trackTier, ledgerOutcome } from "./combat";
+import { liveFightOutcome, monsterHp, progressOnClock, resolveChain, trackTier, ledgerOutcome, calculateDps } from "./combat";
+import { fightDps, openingDamage } from "./effects";
 import { echoReward, rollRelic } from "./loot";
 
 test("a three-minute track at modest dps is a clean kill and a dying echo", () => {
@@ -24,6 +25,19 @@ test("a kill already on the clock is a victory even if the saved playhead is beh
   assert.equal(progressMs, 50_000);
   assert.equal(liveFightOutcome({ progressMs, anchorMs: 0, killMs: 45_000, durationMs: 180_000 }), "victory");
   assert.equal(liveFightOutcome({ progressMs: 20_000, anchorMs: 0, killMs: 45_000, durationMs: 180_000 }), "escaped");
+});
+
+test("a fresh character finishes every track as the song ends", () => {
+  const fresh = { str: 10, agi: 10, int: 10, wis: 10, cha: 10 };
+  const dps = fightDps(calculateDps(fresh), fresh, [], 0);
+  for (const durationMs of [180_000, 465_000, 600_000]) {
+    const hpMax = monsterHp(durationMs, 0);
+    const opening = openingDamage(hpMax, fresh, []);
+    const killMs = ((hpMax - opening) / dps) * 1000;
+    assert.equal(liveFightOutcome({ progressMs: durationMs, anchorMs: 0, killMs, durationMs }), "victory");
+    const remaining = Math.abs(1 - killMs / durationMs);
+    assert.ok(remaining < 0.01, `song and health diverged by ${remaining}`);
+  }
 });
 
 test("finishing a song a few seconds short of the kill is still a victory", () => {
@@ -53,9 +67,12 @@ test("a skip is an escape with no echo", () => {
   assert.equal(ledgerOutcome(1, "escaped"), "faded");
 });
 
-test("boss length uses the 1.3 scalar and always drops a relic", () => {
+test("a long song is a boss for loot and has the same health rate", () => {
   assert.equal(trackTier(600_000).name, "boss");
-  assert.equal(monsterHp(600_000, 0), Math.round(600 * 10 * 1.3));
+  assert.equal(trackTier(400_000).name, "elite");
+  const standardPerSecond = monsterHp(180_000, 0) / 180;
+  const bossPerSecond = monsterHp(600_000, 0) / 600;
+  assert.ok(Math.abs(bossPerSecond - standardPerSecond) < 0.05);
   const relic = rollRelic({
     genreFamily: "Metal",
     tier: "boss",
