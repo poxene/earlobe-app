@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { monsterHp, resolveChain, trackTier, ledgerOutcome } from "./combat";
+import { liveFightOutcome, monsterHp, progressOnClock, resolveChain, trackTier, ledgerOutcome } from "./combat";
 import { echoReward, rollRelic } from "./loot";
 
 test("a three-minute track at modest dps is a clean kill and a dying echo", () => {
@@ -10,6 +10,20 @@ test("a three-minute track at modest dps is a clean kill and a dying echo", () =
   assert.equal(fights[1]?.outcome, "escaped");
   assert.equal(fights[1]?.echoDepth, 1);
   assert.ok((fights[1]?.hpMax ?? 0) > (fights[0]?.hpMax ?? 0));
+});
+
+test("a kill already on the clock is a victory even if the saved playhead is behind", () => {
+  const startedAtMs = 1_000_000;
+  const progressMs = progressOnClock({
+    startedAtMs,
+    anchorMs: 0,
+    durationMs: 180_000,
+    storedProgressMs: 40_000,
+    nowMs: startedAtMs + 50_000,
+  });
+  assert.equal(progressMs, 50_000);
+  assert.equal(liveFightOutcome({ progressMs, anchorMs: 0, killMs: 45_000 }), "victory");
+  assert.equal(liveFightOutcome({ progressMs: 20_000, anchorMs: 0, killMs: 45_000 }), "escaped");
 });
 
 test("a skip is an escape with no echo", () => {

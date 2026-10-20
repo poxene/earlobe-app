@@ -5,6 +5,8 @@ import {
   monsterHp,
   trackTier,
   ledgerOutcome,
+  liveFightOutcome,
+  progressOnClock,
   type FightResult,
   type Grade,
 } from "../../src/lib/game/combat";
@@ -62,6 +64,7 @@ type OpenFight = {
   durationMs: number;
   progressMs: number;
   anchorMs: number;
+  startedAt: string;
   sourceKey: string;
   bonusDamage: number;
   skillId: string | null;
@@ -161,13 +164,11 @@ async function tickLive(
 ): Promise<void> {
   const open = await loadOpen(hero.userId);
   if (open && (!playing || playing.trackId !== open.trackId)) {
-    const ratio = open.durationMs > 0 ? open.progressMs / open.durationMs : 0;
-    const skipped = open.echoDepth === 0 && ratio <= 0.5;
-    const fought = Math.max(0, open.progressMs - open.anchorMs);
+    const progressMs = clockProgress(open);
     const killMs = timeToKill(open);
-    if (!skipped && fought >= killMs) {
+    if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) === "victory") {
       const remaining = 1 - (open.anchorMs + killMs) / Math.max(open.durationMs, 1);
-      await closeFight(hero, open, {
+      await closeFight(hero, { ...open, progressMs }, {
         echoDepth: open.echoDepth,
         hpMax: open.hpMax,
         outcome: "victory",
@@ -177,7 +178,7 @@ async function tickLive(
       }, credit);
     } else {
       const faded = ledgerOutcome(open.echoDepth, "escaped") === "faded";
-      await closeFight(hero, { ...open, progressMs: open.progressMs }, {
+      await closeFight(hero, { ...open, progressMs }, {
         echoDepth: open.echoDepth,
         hpMax: open.hpMax,
         outcome: "escaped",
@@ -217,19 +218,19 @@ async function tickLive(
 }
 
 async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, credit: Credit): Promise<void> {
-  const fought = Math.max(0, playing.progressMs - open.anchorMs);
+  const progressMs = clockProgress(open, playing.progressMs);
   const killMs = timeToKill(open);
-  if (fought < killMs) {
+  if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) !== "victory") {
     const saved = await getSupabase()
       .from("encounters")
-      .update({ progress_ms: playing.progressMs })
+      .update({ progress_ms: progressMs })
       .eq("id", open.id);
     if (saved.error) throw new Error(saved.error.message);
     return;
   }
   const killAt = open.anchorMs + killMs;
-  const remaining = 1 - killAt / playing.durationMs;
-  await closeFight(hero, open, {
+  const remaining = 1 - killAt / Math.max(open.durationMs, 1);
+  await closeFight(hero, { ...open, progressMs }, {
     echoDepth: open.echoDepth,
     hpMax: open.hpMax,
     outcome: "victory",
@@ -238,7 +239,7 @@ async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, cred
     remainingFraction: remaining,
   }, credit);
   if (remaining > 0.1 && playing.isPlaying) {
-    await spawnFight(hero, playing, open.echoDepth + 1, playing.progressMs, open.sourceKey, open.skillCooldowns);
+    await spawnFight(hero, playing, open.echoDepth + 1, progressMs, open.sourceKey, open.skillCooldowns);
   }
 }
 
@@ -360,6 +361,16 @@ function chooseRelic(
   if (!first) return second;
   if (!second) return first;
   return RARITY_RANK[second.rarity] > RARITY_RANK[first.rarity] ? second : first;
+}
+
+function clockProgress(open: OpenFight, reportedMs = open.progressMs): number {
+  return progressOnClock({
+    startedAtMs: new Date(open.startedAt).getTime(),
+    anchorMs: open.anchorMs,
+    durationMs: open.durationMs,
+    storedProgressMs: Math.max(open.progressMs, reportedMs),
+    nowMs: Date.now(),
+  });
 }
 
 function timeToKill(open: OpenFight): number {
@@ -680,7 +691,7 @@ async function loadOpen(userId: string): Promise<OpenFight | null> {
   const { data, error } = await getSupabase()
     .from("encounters")
     .select(
-      "id, track_id, track_name, album_image_url, monster_type, genre_family, hp_max, dps_at_fight, echo_depth, duration_ms, progress_ms, anchor_ms, source_key, bonus_damage, skill_id, echo_bonus, grade_bump, drop_advantage, xp_bonus, skill_cooldowns",
+      "id, track_id, track_name, album_image_url, monster_type, genre_family, hp_max, dps_at_fight, echo_depth, duration_ms, progress_ms, anchor_ms, started_at, source_key, bonus_damage, skill_id, echo_bonus, grade_bump, drop_advantage, xp_bonus, skill_cooldowns",
     )
     .eq("user_id", userId)
     .is("resolved_at", null)
@@ -702,6 +713,7 @@ async function loadOpen(userId: string): Promise<OpenFight | null> {
     durationMs: data.duration_ms,
     progressMs: data.progress_ms,
     anchorMs: data.anchor_ms,
+    startedAt: data.started_at,
     sourceKey: data.source_key,
     bonusDamage: data.bonus_damage,
     skillId: data.skill_id,
