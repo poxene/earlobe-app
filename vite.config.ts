@@ -1,11 +1,24 @@
-import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
+import { defineConfig } from "vite";
 
-// https://vitejs.dev/config/
+const api = "http://localhost:3001";
+
 export default defineConfig({
-  plugins: [react()],
-  build: {
-    minify: "esbuild",
-    target: "esnext",
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      "/api": { target: api },
+      "/auth": { target: api },
+    },
   },
 });
