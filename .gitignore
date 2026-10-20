@@ -1,4 +1,17 @@
-# Logs
+# dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# build
+dist
+dist-ssr
+dist-server
+build
+coverage
+*.tsbuildinfo
+
+# logs
 logs
 *.log
 npm-debug.log*
@@ -7,20 +20,28 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# local env files — keep the empty template
+.env
+.env.*
+!.env.example
 
-# Editor directories and files
+# supabase local state
+supabase/.branches
+supabase/.temp
+
+# editor and os
+.DS_Store
+.idea
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-.env
+# misc
+*.pem
+*.local
+.vercel
+next-env.d.ts
