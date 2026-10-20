@@ -11,7 +11,12 @@ import { lastfmRouter } from "./routes/lastfm";
 
 const app = express();
 app.disable("x-powered-by");
+app.set("etag", false);
 app.set("trust proxy", 1);
+app.use((_req, res, next) => {
+  res.set("Cache-Control", "private, no-store");
+  next();
+});
 app.use(
   cors({
     origin: env.frontendOrigin,
