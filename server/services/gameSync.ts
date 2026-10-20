@@ -166,7 +166,7 @@ async function tickLive(
   if (open && (!playing || playing.trackId !== open.trackId)) {
     const progressMs = clockProgress(open);
     const killMs = timeToKill(open);
-    if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) === "victory") {
+    if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs, durationMs: open.durationMs, echoDepth: open.echoDepth }) === "victory") {
       const remaining = 1 - (open.anchorMs + killMs) / Math.max(open.durationMs, 1);
       await closeFight(hero, { ...open, progressMs }, {
         echoDepth: open.echoDepth,
@@ -193,7 +193,8 @@ async function tickLive(
   }
 
   const still = await loadOpen(hero.userId);
-  if (playing && !still) {
+  const sameTrack = Boolean(open && playing && open.trackId === playing.trackId);
+  if (playing && !still && !sameTrack && !(await wonThisTrack(hero.userId, playing.trackId))) {
     await spawnFight(hero, playing, 0, playing.progressMs, sessionKey(playing));
   }
   if (playing && qualifies(playing.progressMs, playing.durationMs) && !alreadyHeard(heard, playing.trackId, playedAtFrom(playing), playing.durationMs)) {
@@ -220,7 +221,7 @@ async function tickLive(
 async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, credit: Credit): Promise<void> {
   const progressMs = clockProgress(open, playing.progressMs);
   const killMs = timeToKill(open);
-  if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) !== "victory") {
+  if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs, durationMs: open.durationMs, echoDepth: open.echoDepth }) !== "victory") {
     const saved = await getSupabase()
       .from("encounters")
       .update({ progress_ms: progressMs })
@@ -813,6 +814,21 @@ function fastest(current: number | null, next: number | null): number | null {
   if (next === null) return current;
   if (current === null) return next;
   return Math.min(current, next);
+}
+
+async function wonThisTrack(userId: string, trackId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 90_000).toISOString();
+  const { data, error } = await getSupabase()
+    .from("encounters")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("track_id", trackId)
+    .eq("echo_depth", 0)
+    .eq("outcome", "victory")
+    .gte("resolved_at", since)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.length ?? 0) > 0;
 }
 
 function sessionKey(playing: NowPlaying): string {

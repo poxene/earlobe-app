@@ -1,13 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActiveFight } from "@/lib/game/snapshot";
 
-export function CombatBars({ fight }: { fight: ActiveFight }) {
+export function CombatBars({ fight, onBreak }: { fight: ActiveFight; onBreak?: () => void }) {
   const now = useClock(fight.isPlaying);
   const elapsed = fight.isPlaying ? Math.max(0, now - fight.observedAt) : 0;
   const progress = Math.min(fight.durationMs, fight.progressMs + elapsed);
   const hpLeft = Math.max(0, fight.hpLeft - fight.dps * (elapsed / 1000));
   const hpFraction = fight.hpMax > 0 ? hpLeft / fight.hpMax : 0;
   const trackFraction = fight.durationMs > 0 ? progress / fight.durationMs : 0;
+  const asked = useRef("");
+  const onBreakRef = useRef(onBreak);
+  onBreakRef.current = onBreak;
+
+  useEffect(() => {
+    if (hpLeft > 0) return;
+    const key = `${fight.trackId}:${fight.echoDepth}`;
+    if (asked.current === key) return;
+    asked.current = key;
+    onBreakRef.current?.();
+  }, [hpLeft, fight.trackId, fight.echoDepth]);
 
   return (
     <section className="mt-4 border border-white/10 bg-panel/90 p-4">

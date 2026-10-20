@@ -44,7 +44,7 @@ export function BattlePage() {
         {fight?.bonusDamage ? (
           <p className="mt-3 text-center text-xs text-zinc-500">{fight.bonusDamage} bonus damage so far.</p>
         ) : null}
-        {fight ? <CombatBars fight={fight} /> : null}
+        {fight ? <CombatBars fight={fight} onBreak={() => void sync.refetch()} /> : null}
         <Log rows={sync.data?.battles ?? []} />
         <p className="mt-6 text-center text-xs text-zinc-600">
           <Link to="/" className="underline decoration-white/20 underline-offset-4 hover:text-zinc-300">

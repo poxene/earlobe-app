@@ -29,6 +29,9 @@ export function trackTier(durationMs: number): { name: TrackTier; scalar: number
   return { name: "standard", scalar: 1 };
 }
 
+//— a finished song still counts when the last blow was only a few seconds short. a skip is not a finish.
+export const KILL_SLACK_MS = 15_000;
+
 export function monsterHp(durationMs: number, echoDepth: number): number {
   const seconds = Math.max(1, durationMs / 1000);
   const density = 10 + echoDepth * 2;
@@ -129,10 +132,22 @@ export function progressOnClock(input: {
   return Math.max(0, input.storedProgressMs, capped);
 }
 
-//— a monster at 0 hp is a kill, including one that died before the halfway mark. leaving early without the kill is the escape.
-export function liveFightOutcome(input: { progressMs: number; anchorMs: number; killMs: number }): Outcome {
+//— a monster at 0 hp is a kill, including one that died before the halfway mark.
+// hearing a track out kills it, even if an older fight stored extra health. an echo still has to fall on its own.
+export function liveFightOutcome(input: {
+  progressMs: number;
+  anchorMs: number;
+  killMs: number;
+  durationMs: number;
+  echoDepth?: number;
+}): Outcome {
   const fought = Math.max(0, input.progressMs - input.anchorMs);
-  if (Number.isFinite(input.killMs) && fought >= input.killMs) return "victory";
+  if (!Number.isFinite(input.killMs)) return "escaped";
+  if (fought >= input.killMs) return "victory";
+  const heardOut = input.durationMs > 0 && input.progressMs >= input.durationMs;
+  if (!heardOut) return "escaped";
+  if ((input.echoDepth ?? 0) === 0) return "victory";
+  if (input.killMs - fought <= KILL_SLACK_MS) return "victory";
   return "escaped";
 }
 

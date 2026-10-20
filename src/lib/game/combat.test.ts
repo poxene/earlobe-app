@@ -22,8 +22,27 @@ test("a kill already on the clock is a victory even if the saved playhead is beh
     nowMs: startedAtMs + 50_000,
   });
   assert.equal(progressMs, 50_000);
-  assert.equal(liveFightOutcome({ progressMs, anchorMs: 0, killMs: 45_000 }), "victory");
-  assert.equal(liveFightOutcome({ progressMs: 20_000, anchorMs: 0, killMs: 45_000 }), "escaped");
+  assert.equal(liveFightOutcome({ progressMs, anchorMs: 0, killMs: 45_000, durationMs: 180_000 }), "victory");
+  assert.equal(liveFightOutcome({ progressMs: 20_000, anchorMs: 0, killMs: 45_000, durationMs: 180_000 }), "escaped");
+});
+
+test("finishing a song a few seconds short of the kill is still a victory", () => {
+  assert.equal(
+    liveFightOutcome({ progressMs: 180_000, anchorMs: 0, killMs: 184_000, durationMs: 180_000 }),
+    "victory",
+  );
+  assert.equal(
+    liveFightOutcome({ progressMs: 180_000, anchorMs: 0, killMs: 210_000, durationMs: 180_000 }),
+    "victory",
+  );
+  assert.equal(
+    liveFightOutcome({ progressMs: 180_000, anchorMs: 0, killMs: 210_000, durationMs: 180_000, echoDepth: 1 }),
+    "escaped",
+  );
+  assert.equal(
+    liveFightOutcome({ progressMs: 90_000, anchorMs: 0, killMs: 100_000, durationMs: 180_000 }),
+    "escaped",
+  );
 });
 
 test("a skip is an escape with no echo", () => {
