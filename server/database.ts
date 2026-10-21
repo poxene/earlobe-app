@@ -308,6 +308,12 @@ export type Database = {
         best_grade: string | null;
         fastest_kill_sec: number | null;
       }>;
+      town_messages: Table<{
+        id: string;
+        user_id: string;
+        body: string;
+        created_at: string;
+      }>;
       presence: Table<{
         user_id: string;
         track_name: string | null;

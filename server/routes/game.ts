@@ -6,6 +6,7 @@ import { sellRelic, upgradeRelics } from "../services/shop";
 import { loadCodex } from "../services/codexRead";
 import { syncListener } from "../services/gameSync";
 import { createParty, joinParty, leaveParty, loadFeed, loadParty } from "../services/party";
+import { loadTown, postTownMessage } from "../services/town";
 import { setDisplayName } from "../services/profiles";
 import { beginQuest } from "../services/playback";
 import { listQuests, rerollQuest } from "../services/questBoard";
@@ -34,6 +35,14 @@ gameRouter.post("/quests/:id/reroll", (req, res, next) => {
     await rerollQuest(userId, req.params.id);
     return { ok: true };
   });
+});
+
+gameRouter.get("/town", (req, res, next) => {
+  void act(req, res, next, async (userId) => loadTown(userId));
+});
+
+gameRouter.post("/town/chat", (req, res, next) => {
+  void act(req, res, next, async (userId) => postTownMessage(userId, text(req.body, "body")));
 });
 
 gameRouter.get("/party", (req, res, next) => {

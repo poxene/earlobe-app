@@ -4,24 +4,18 @@ import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { useGameSync } from "@/hooks/useGameSync";
 import type { NowPlaying } from "@/lib/music/provider";
 
-export function NowPlayingBar() {
+export function NowPlayingDock() {
   const query = useNowPlaying();
   const sync = useGameSync();
   const fight = sync.data?.fight ?? null;
+  const track = query.data;
 
-  return (
-    <section className="mx-auto mb-2 w-full max-w-5xl px-4 md:px-8">
-      {query.isPending ? <QuietLine>Checking Last.fm.</QuietLine> : null}
-      {query.isError ? <QuietLine>Couldn't reach Last.fm.</QuietLine> : null}
-      {query.isSuccess && query.data === null ? <QuietLine>Nothing is playing.</QuietLine> : null}
-      {query.data ? (
-        <PlayingTrack
-          track={query.data}
-          color={fight && fight.trackId === query.data.trackId ? fight.color : "#d4a24e"}
-        />
-      ) : null}
-    </section>
-  );
+  if (query.isPending) return <Quiet label="NOW PLAYING" note="Checking Last.fm." />;
+  if (query.isError) return <Quiet label="QUIET" note="Couldn't reach Last.fm." />;
+  if (!track) return <Quiet label="QUIET" note="Nothing is playing." />;
+
+  const color = fight && fight.trackId === track.trackId ? fight.color : "#d4a24e";
+  return <PlayingTrack track={track} color={color} />;
 }
 
 function PlayingTrack({ track, color }: { track: NowPlaying; color: string }) {
@@ -30,40 +24,63 @@ function PlayingTrack({ track, color }: { track: NowPlaying; color: string }) {
   const artists = track.artistNames.join(", ");
 
   return (
-    <div className="flex items-center gap-3 border border-white/10 bg-panel/90 p-3">
-      {track.albumImageUrl ? (
-        <img
-          src={track.albumImageUrl}
-          alt=""
-          className="h-14 w-14 shrink-0 object-cover"
-        />
-      ) : (
-        <div className="h-14 w-14 shrink-0 bg-white/5" />
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-[11px] tracking-[0.22em]" style={{ color }}>
-          <EqualizerBars active={track.isPlaying} color={color} />
-          {track.isPlaying ? "NOW PLAYING" : "PAUSED"}
-        </p>
-        <p className="truncate text-base text-zinc-100">{track.trackName}</p>
-        <p className="truncate text-sm text-zinc-400">{artists || track.albumName}</p>
-        <div
-          className="mt-2 h-1 overflow-hidden bg-white/10"
-          role="progressbar"
-          aria-label="Track progress"
-          aria-valuemin={0}
-          aria-valuemax={track.durationMs}
-          aria-valuenow={Math.round(progress)}
-        >
-          <div className="h-full" style={{ width: `${fraction * 100}%`, background: color }} />
+    <aside className="w-36 shrink-0 self-end sm:w-52">
+      <p className="flex items-center gap-1.5 whitespace-nowrap text-[10px] tracking-[0.14em]" style={{ color }}>
+        <EqualizerBars active={track.isPlaying} color={color} />
+        {track.isPlaying ? "NOW PLAYING" : "PAUSED"}
+      </p>
+      <div className="mt-1 flex min-w-0 items-center gap-2">
+        {track.albumImageUrl ? (
+          <img src={track.albumImageUrl} alt="" className="h-8 w-8 shrink-0 object-cover" />
+        ) : (
+          <div className="h-8 w-8 shrink-0 bg-white/5" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-zinc-100" title={track.trackName}>
+            {track.trackName}
+          </p>
+          <p className="truncate text-[11px] text-zinc-500" title={artists || track.albumName}>
+            {artists || track.albumName}
+          </p>
+          <Progress fraction={fraction} color={color} progress={progress} durationMs={track.durationMs} />
         </div>
       </div>
+    </aside>
+  );
+}
+
+function Progress({
+  fraction,
+  color,
+  progress,
+  durationMs,
+}: {
+  fraction: number;
+  color: string;
+  progress: number;
+  durationMs: number;
+}) {
+  return (
+    <div
+      className="mt-1 h-0.5 overflow-hidden bg-white/10"
+      role="progressbar"
+      aria-label="Track progress"
+      aria-valuemin={0}
+      aria-valuemax={durationMs}
+      aria-valuenow={Math.round(progress)}
+    >
+      <div className="h-full" style={{ width: `${fraction * 100}%`, background: color }} />
     </div>
   );
 }
 
-function QuietLine({ children }: { children: string }) {
-  return <p className="border border-white/10 bg-panel/80 px-3 py-3 text-sm text-zinc-400">{children}</p>;
+function Quiet({ label, note }: { label: string; note: string }) {
+  return (
+    <aside className="w-36 shrink-0 self-end sm:w-52">
+      <p className="shrink-0 whitespace-nowrap text-[10px] tracking-[0.14em] text-zinc-500">{label}</p>
+      <p className="mt-1 truncate text-xs text-zinc-500">{note}</p>
+    </aside>
+  );
 }
 
 function useSmoothedProgress(track: NowPlaying): number {

@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { CharacterSheet } from "@/components/CharacterSheet";
 import { Frame } from "@/components/Frame";
-import { NowPlayingBar } from "@/components/NowPlayingBar";
 import { AwayModal, LevelUpModal, QuestModal, ToastStack, UnlockModal } from "@/components/GameOverlays";
 import { useGameSync } from "@/hooks/useGameSync";
 import { apiSend, ApiError } from "@/lib/api";
@@ -101,7 +100,6 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
 
   return (
     <Frame>
-      <NowPlayingBar />
       {sync.data?.fight ? (
         <p className="mx-auto mb-4 w-full max-w-5xl px-4 text-sm md:px-8">
           <Link to="/battle" className="text-gold hover:text-gold-2">

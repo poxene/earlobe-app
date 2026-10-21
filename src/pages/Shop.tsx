@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Frame } from "@/components/Frame";
+import { OnlineList } from "@/components/TownSquare";
 import { GoldAmount } from "@/components/Gold";
 import { RelicCard } from "@/components/RelicCard";
 import { useCharacter } from "@/hooks/useCharacter";
@@ -98,7 +99,7 @@ export function TownPage() {
             Back to town
           </button>
         ) : (
-          <p className="mt-3 max-w-xl text-sm text-zinc-400">Equipped relics stay on the character.</p>
+          <p className="mt-3 max-w-xl text-sm text-zinc-400">A few people are out. Equipped relics stay on the character.</p>
         )}
         {sheet ? (
           <p className="mt-4 text-sm tracking-[0.16em]">
@@ -108,7 +109,9 @@ export function TownPage() {
         {note ? <p className="mt-3 text-sm text-gold">{note}</p> : null}
 
         {stall === null ? (
-          <ul className="mt-5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          <div className="mt-5 flex items-start gap-2">
+            <OnlineList />
+            <ul className="grid min-w-0 flex-1 grid-cols-1 gap-1.5 sm:grid-cols-2">
               <li>
                 <StallButton title="Vendor" detail="Buys spare relics for gold." onClick={() => setStall("vendor")}>
                   <VendorFigure />
@@ -129,7 +132,8 @@ export function TownPage() {
                   <BlacksmithFigure />
                 </StallButton>
               </li>
-          </ul>
+            </ul>
+          </div>
         ) : null}
 
         {stall === "vendor" ? (
