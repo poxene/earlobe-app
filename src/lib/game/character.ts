@@ -1,4 +1,5 @@
 import { classById, classForFamily } from "@/lib/game/classes";
+import type { MaterialStackView } from "@/lib/game/materials";
 import { calculateDps } from "@/lib/game/combat";
 import type { Cut, RelicEffect } from "@/lib/game/effects";
 import { fightDps } from "@/lib/game/effects";
@@ -106,6 +107,7 @@ export type CharacterSheetModel = {
   albums: AlbumCover[];
   relics: (RelicView | null)[];
   inventory: RelicView[];
+  stacks: MaterialStackView[];
   echoes: number;
   unallocatedPoints: number;
   skills: string[];
@@ -186,6 +188,7 @@ export function buildCharacter(input: {
     albums: input.albums.slice(0, 4),
     relics: DOLL_SLOTS.map(() => null),
     inventory: [],
+    stacks: [],
     echoes: 0,
     unallocatedPoints: 0,
     skills: [],

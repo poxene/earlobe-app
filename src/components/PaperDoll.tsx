@@ -1,7 +1,9 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { ItemIcon } from "@/components/portrait/ItemIcon";
+import { MaterialMark } from "@/components/portrait/MaterialMark";
 import { affixLines, type RelicView } from "@/lib/game/character";
+import type { MaterialStackView } from "@/lib/game/materials";
 import { DOLL_SLOTS, fittingSlots, itemFits, pieceOf, SLOT_LABEL, slotIndex, slotPhrase } from "@/lib/portrait/gear";
 import { CUT_LINE, EFFECT_NAME, effectDetail } from "@/lib/game/effects";
 import { RARITY_COLOR } from "@/lib/game/loot";
@@ -11,15 +13,21 @@ const MIME = "application/x-earlobe-relic";
 export function PaperDoll({
   relics,
   inventory = [],
+  stacks = [],
   showPack = true,
   onEquip,
   onUnequip,
+  onSplit,
+  onCombine,
 }: {
   relics: readonly (RelicView | null)[];
   inventory?: readonly RelicView[];
+  stacks?: readonly MaterialStackView[];
   showPack?: boolean;
   onEquip?: (id: string, slot: number) => Promise<void> | void;
   onUnequip?: (id: string) => Promise<void> | void;
+  onSplit?: (id: string, quantity: number) => Promise<void> | void;
+  onCombine?: (id: string) => Promise<void> | void;
 }) {
   const [over, setOver] = useState<number | "pack" | null>(null);
   const [note, setNote] = useState("");
@@ -139,7 +147,7 @@ export function PaperDoll({
       {showPack ? (
       <div className="border-t border-white/10 pt-6 sm:col-span-2 sm:row-start-3 lg:col-span-3 lg:row-start-2">
       <p className="max-w-2xl text-sm text-zinc-400">
-        Each relic fits one slot. Worn gear shows on the portrait. Mythic items are only made in town.{" "}
+        Each relic fits one slot. Worn gear shows on the portrait. Materials from a kill stack here. Mythic items are only made in town.{" "}
         <Link to="/town" className="text-gold">
           Sell or upgrade extras in town.
         </Link>
@@ -157,7 +165,7 @@ export function PaperDoll({
         onDragLeave={() => setOver((current) => (current === "pack" ? null : current))}
         onDrop={(event) => void dropOnPack(event)}
       >
-        {inventory.length === 0 ? (
+        {inventory.length === 0 && stacks.length === 0 ? (
           <p className="px-2 py-3 text-sm text-zinc-500">Nothing in the pack. Drop worn gear here to take it off.</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
@@ -192,6 +200,35 @@ export function PaperDoll({
                       return;
                     }
                     void onEquip(relic.id, target);
+                  }}
+                />
+              </li>
+            ))}
+            {stacks.map((stack) => (
+              <li key={stack.id}>
+                <MaterialSquare
+                  stack={stack}
+                  open={tip === stack.id}
+                  canCombine={stacks.some((other) => other.id !== stack.id && other.slug === stack.slug)}
+                  onHover={(open) => {
+                    if (open && hoverArmed.current) setTip(stack.id);
+                    else setTip((current) => (current === stack.id ? null : current));
+                  }}
+                  onSplit={async (quantity) => {
+                    silenceTips();
+                    try {
+                      await onSplit?.(stack.id, quantity);
+                    } catch {
+                      setNote("Couldn't split that stack.");
+                    }
+                  }}
+                  onCombine={async () => {
+                    silenceTips();
+                    try {
+                      await onCombine?.(stack.id);
+                    } catch {
+                      setNote("Couldn't combine those stacks.");
+                    }
                   }}
                 />
               </li>
@@ -264,6 +301,70 @@ function ItemSquare({
           </span>
         ))}
       </span>
+      ) : null}
+    </span>
+  );
+}
+
+function MaterialSquare({
+  stack,
+  open,
+  canCombine,
+  onHover,
+  onSplit,
+  onCombine,
+}: {
+  stack: MaterialStackView;
+  open: boolean;
+  canCombine: boolean;
+  onHover: (open: boolean) => void;
+  onSplit: (quantity: number) => Promise<void> | void;
+  onCombine: () => Promise<void> | void;
+}) {
+  const [take, setTake] = useState(Math.max(1, Math.floor(stack.quantity / 2)));
+  const amount = Math.min(stack.quantity - 1, Math.max(1, take));
+  return (
+    <span className="relative block h-14 w-14" onMouseEnter={() => onHover(true)} onMouseLeave={() => onHover(false)}>
+      <button
+        type="button"
+        aria-label={`${stack.name}, ${stack.quantity}`}
+        className="grid h-14 w-14 place-items-center border bg-ink/60"
+        style={{ borderColor: stack.color }}
+      >
+        <MaterialMark color={stack.color} tier={stack.tier} />
+        <span className="absolute bottom-0.5 right-0.5 bg-ink/90 px-1 text-[10px] font-black leading-none text-zinc-100">{stack.quantity}</span>
+      </button>
+      {open ? (
+        <span role="tooltip" className="absolute bottom-full left-0 z-40 mb-2 w-56 border border-white/15 bg-ink p-2 text-left shadow-lg">
+          <span className="block text-[10px] tracking-[0.16em]" style={{ color: stack.color }}>
+            {stack.monster.toUpperCase()}
+          </span>
+          <span className="mt-0.5 block text-sm text-zinc-100">{stack.name}</span>
+          <span className="mt-1 block text-xs text-zinc-400">{stack.blurb}</span>
+          <span className="mt-1 block text-xs text-zinc-300">Stack of {stack.quantity}</span>
+          {stack.quantity > 1 ? (
+            <span className="mt-2 flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                max={stack.quantity - 1}
+                value={amount}
+                aria-label={`Split ${stack.name}`}
+                className="w-14 border border-white/15 bg-ink px-1 py-0.5 text-xs text-zinc-100"
+                onChange={(event) => setTake(Number(event.target.value))}
+                onClick={(event) => event.stopPropagation()}
+              />
+              <button type="button" className="border border-white/15 px-2 py-0.5 text-xs text-zinc-200" onClick={() => void onSplit(amount)}>
+                Split
+              </button>
+            </span>
+          ) : null}
+          {canCombine ? (
+            <button type="button" className="mt-2 block text-xs text-gold" onClick={() => void onCombine()}>
+              Combine stacks
+            </button>
+          ) : null}
+        </span>
       ) : null}
     </span>
   );

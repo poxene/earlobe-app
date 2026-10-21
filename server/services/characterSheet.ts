@@ -1,4 +1,5 @@
 import { buildCharacter, type AlbumCover, type CharacterSheetModel, type ListenerRecord, type RelicView, type Stats } from "../../src/lib/game/character";
+import type { MaterialStackView } from "../../src/lib/game/materials";
 import { addStats, calculateDps, sumStats } from "../../src/lib/game/combat";
 import { fightDps, parseStoredEffects } from "../../src/lib/game/effects";
 import { treeEffects } from "../../src/lib/game/trees";
@@ -14,6 +15,7 @@ import { getSupabase } from "../supabase";
 import { parseRolls } from "./bonus";
 import { fetchPlaycount } from "./lastfmClient";
 import { topAlbums, topArtists } from "./listening";
+import { readStacks } from "./materials";
 import { getProfile, type ProfileRecord } from "./profiles";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -149,14 +151,15 @@ export async function presentCharacter(userId: string): Promise<CharacterSheetMo
   if (!profile) throw new Error("unauthenticated");
   const character = await readCharacter(userId);
   if (!character) throw new Error("unauthenticated");
-  const [weights, relics, victories, escapes, record] = await Promise.all([
+  const [weights, relics, victories, escapes, record, stacks] = await Promise.all([
     readWeights(userId),
     readRelics(userId),
     countOutcomes(userId, "victory"),
     countOutcomes(userId, "escaped"),
     readRecord(userId),
+    readStacks(userId),
   ]);
-  return modelFromStored(profile, character, weights, relics, victories, escapes, { ...record, relics: relics.length });
+  return modelFromStored(profile, character, weights, relics, victories, escapes, { ...record, relics: relics.length }, stacks);
 }
 
 function modelFromStored(
@@ -167,6 +170,7 @@ function modelFromStored(
   victories: number,
   escapes: number,
   record: ListenerRecord,
+  stacks: MaterialStackView[],
 ): CharacterSheetModel {
   const useHours = weights.some((row) => row.hours30d > 0);
   const total = weights.reduce((sum, row) => sum + (useHours ? row.hours30d : row.share), 0) || 1;
@@ -209,6 +213,7 @@ function modelFromStored(
     albums: character.albums,
     relics: slots,
     inventory,
+    stacks,
     echoes: character.echoes,
     unallocatedPoints: character.unallocated,
     skills: character.skills,

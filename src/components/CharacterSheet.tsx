@@ -34,6 +34,8 @@ export function CharacterSheet({
   onApplyStats,
   onEquip,
   onUnequip,
+  onSplit,
+  onCombine,
   onSwitchClass,
   onApplySkills,
   onReset,
@@ -43,6 +45,8 @@ export function CharacterSheet({
   onApplyStats?: (grants: Stats) => Promise<void> | void;
   onEquip?: (id: string, slot: number) => Promise<void> | void;
   onUnequip?: (id: string) => Promise<void> | void;
+  onSplit?: (id: string, quantity: number) => Promise<void> | void;
+  onCombine?: (id: string) => Promise<void> | void;
   onSwitchClass?: (id: string) => void;
   onApplySkills?: (skillIds: string[]) => Promise<void> | void;
   onReset?: () => void;
@@ -197,7 +201,15 @@ export function CharacterSheet({
               />
             </div>
           </div>
-          <PaperDoll relics={sheet.relics} inventory={sheet.inventory} onEquip={onEquip} onUnequip={onUnequip} />
+          <PaperDoll
+            relics={sheet.relics}
+            inventory={sheet.inventory}
+            stacks={sheet.stacks}
+            onEquip={onEquip}
+            onUnequip={onUnequip}
+            onSplit={onSplit}
+            onCombine={onCombine}
+          />
           {sheet.badges.length > 0 ? (
             <p className="text-xs tracking-[0.16em] text-gold sm:col-span-2 lg:col-span-3">{sheet.badges.join(" · ").toUpperCase()}</p>
           ) : null}

@@ -37,6 +37,7 @@ function isCharacterSheet(value: unknown): value is CharacterSheetModel {
     typeof value.thinHistory === "boolean" &&
     Array.isArray(value.genres) &&
     Array.isArray(value.albums) &&
-    Array.isArray(value.relics)
+    Array.isArray(value.relics) &&
+    Array.isArray(value.stacks)
   );
 }

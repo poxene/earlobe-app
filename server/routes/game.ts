@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import { GameError, ReconnectRequired } from "../errors";
 import { allocatePoint, allocatePoints, castSkillOnFight, learnSkills, resetStats, setBody, setEquipped, switchClass } from "../services/actions";
+import { combineStack, splitStack } from "../services/materials";
 import { sellRelic, upgradeRelics } from "../services/shop";
 import { loadCodex } from "../services/codexRead";
 import { syncListener } from "../services/gameSync";
@@ -120,6 +121,20 @@ gameRouter.post("/shop/upgrade", (req, res, next) => {
   void act(req, res, next, async (userId) => upgradeRelics(userId, idList(req.body)));
 });
 
+gameRouter.post("/materials/split", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await splitStack(userId, text(req.body, "stackId"), count(req.body, "quantity"));
+    return { ok: true };
+  });
+});
+
+gameRouter.post("/materials/combine", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await combineStack(userId, text(req.body, "stackId"));
+    return { ok: true };
+  });
+});
+
 function act(
   req: import("express").Request,
   res: Response,
@@ -152,6 +167,12 @@ function text(body: unknown, key: string): string {
 }
 
 const STAT_NAMES = ["str", "agi", "int", "wis", "cha"] as const;
+
+function count(body: unknown, key: string): number {
+  const value = isRecord(body) ? body[key] : undefined;
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new GameError(400, "bad_quantity");
+  return value;
+}
 
 function slotIndex(body: unknown): number | undefined {
   if (!isRecord(body) || body.slot === undefined) return undefined;

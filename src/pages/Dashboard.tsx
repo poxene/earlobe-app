@@ -114,6 +114,8 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
         onApplyStats={(grants) => commit("/api/character/allocate", { stats: grants }, (current) => withStatGrants(current, grants))}
         onEquip={(id, slot) => moveGear(`/api/relics/${id}/equip`, { slot }, (current) => withEquipped(current, id, slot))}
         onUnequip={(id) => moveGear(`/api/relics/${id}/unequip`, undefined, (current) => withUnequipped(current, id))}
+        onSplit={(id, quantity) => refresh("/api/materials/split", { stackId: id, quantity })}
+        onCombine={(id) => refresh("/api/materials/combine", { stackId: id })}
         onSwitchClass={(id) => void refresh("/api/character/class", { classId: id })}
         onApplySkills={(ids) => commit("/api/character/skill", { skillIds: ids }, (current) => withSkills(current, ids))}
         onReset={() => void refresh("/api/character/reset")}

@@ -14,6 +14,7 @@ import { dropLuck, echoPayout, openingDamage, settleGrade } from "../../src/lib/
 import { parseCooldowns } from "../../src/lib/game/skills";
 import { treeEffects } from "../../src/lib/game/trees";
 import { echoReward, RARITY_RANK, rollRelic, statBonusPayload, type RelicDraft } from "../../src/lib/game/loot";
+import { rollMaterialDrops } from "../../src/lib/game/materials";
 import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying } from "../../src/lib/music/provider";
 import {
@@ -28,6 +29,7 @@ import { ReconnectRequired } from "../errors";
 import { getSupabase } from "../supabase";
 import { familiesForArtists, loadArtists } from "./catalog";
 import { presentCharacter, loadCharacterSheet } from "./characterSheet";
+import { grantMaterials } from "./materials";
 import { awardXp, heroDps, heroStats, loadHero, saveHero, type Credit, type Hero } from "./hero";
 import { albumTrackIds, listenerActivity } from "./listening";
 import { postFeed } from "./party";
@@ -304,6 +306,17 @@ async function closeFight(hero: Hero, open: OpenFight, fight: FightResult, credi
     await postFeed(hero.userId, "battle", { monster: open.monster, grade: fight.grade });
     if (draft.relicName) {
       credit.toasts.push({ id: randomUUID(), message: `${draft.relicName} dropped.` });
+    }
+    const drops = rollMaterialDrops({
+      monster: monsterForFamily(open.family).monster,
+      tier: trackTier(open.durationMs).name,
+      grade: fight.grade,
+      salt: open.id,
+    });
+    if (drops.length > 0) {
+      await grantMaterials(hero.userId, drops);
+      const line = drops.map((drop) => `${drop.name} ×${drop.quantity}`).join(", ");
+      credit.toasts.push({ id: randomUUID(), message: `${line} dropped.` });
     }
   }
 }

@@ -248,6 +248,13 @@ export type Database = {
         payload: Json;
         created_at: string;
       }>;
+      material_stacks: Table<{
+        id: string;
+        user_id: string;
+        slug: string;
+        quantity: number;
+        acquired_at: string;
+      }>;
       relics: Table<{
         id: string;
         user_id: string;
