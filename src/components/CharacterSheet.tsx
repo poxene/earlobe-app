@@ -1,13 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { RelicCard } from "@/components/RelicCard";
-import { GoldAmount } from "@/components/Gold";
+import { GoldAmount, GoldMark } from "@/components/Gold";
+import { PaperDoll } from "@/components/PaperDoll";
+import { BodyChip, ListenerPortrait } from "@/components/portrait/ListenerPortrait";
 import { Tip } from "@/components/Tip";
 import { XpBar } from "@/components/XpBar";
-import type { AlbumCover, CharacterSheetModel, Stats } from "@/lib/game/character";
+import { EMPTY_RECORD, type CharacterSheetModel, type Stats } from "@/lib/game/character";
 import { addStats, calculateDps, sumStats } from "@/lib/game/combat";
 import { dpsTooltip, echoTooltip, fightDps, statTooltip } from "@/lib/game/effects";
 import { canSpend, nodeById, nodeOwned, nodesForClass, purchasable, treeEffects, withoutPending } from "@/lib/game/trees";
+import { BODY_TYPES, bodyName, type BodyType } from "@/lib/portrait/body";
 
 const STAT_ROWS: { key: keyof Stats; label: string }[] = [
   { key: "str", label: "STR" },
@@ -19,6 +21,14 @@ const STAT_ROWS: { key: keyof Stats; label: string }[] = [
 
 const EMPTY_STATS: Stats = { str: 0, agi: 0, int: 0, wis: 0, cha: 0 };
 
+type SheetTab = "stats" | "skills" | "advanced";
+
+const SHEET_TABS: { id: SheetTab; label: string }[] = [
+  { id: "stats", label: "Attributes" },
+  { id: "skills", label: "Skills" },
+  { id: "advanced", label: "Stats" },
+];
+
 export function CharacterSheet({
   sheet,
   onApplyStats,
@@ -27,20 +37,21 @@ export function CharacterSheet({
   onSwitchClass,
   onApplySkills,
   onReset,
+  onBody,
 }: {
   sheet: CharacterSheetModel;
   onApplyStats?: (grants: Stats) => Promise<void> | void;
-  onEquip?: (id: string) => void;
-  onUnequip?: (id: string) => void;
+  onEquip?: (id: string, slot: number) => Promise<void> | void;
+  onUnequip?: (id: string) => Promise<void> | void;
   onSwitchClass?: (id: string) => void;
   onApplySkills?: (skillIds: string[]) => Promise<void> | void;
   onReset?: () => void;
+  onBody?: (body: BodyType) => Promise<void> | void;
 }) {
   const [draft, setDraft] = useState<Stats>(EMPTY_STATS);
   const [pending, setPending] = useState<string[]>([]);
   const [problem, setProblem] = useState("");
   const applying = useRef(false);
-  const sleeves = Array.from({ length: 4 }, (_, index) => sheet.albums[index] ?? null);
   const pendingNodes = pending.filter((id) => id !== "bank");
   const stagedBonus = treeEffects(sheet.className, pendingNodes).bonus;
   const stats = addStats(sheet.stats, sumStats([draft, stagedBonus]));
@@ -49,6 +60,7 @@ export function CharacterSheet({
   const spent = draft.str + draft.agi + draft.int + draft.wis + draft.cha;
   const pointsLeft = Math.max(0, sheet.unallocatedPoints - spent);
   const picksLeft = Math.max(0, sheet.skillPicks - pending.length);
+  const [tab, setTab] = useState<SheetTab>("stats");
 
   function addPoint(stat: keyof Stats) {
     setProblem("");
@@ -124,40 +136,23 @@ export function CharacterSheet({
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-16 md:px-8">
-      <p className="mb-3 text-[11px] tracking-[0.35em] text-zinc-500">CHARACTER SHEET</p>
+      <p className="mb-3 text-[11px] tracking-[0.35em] text-zinc-500">CHARACTER</p>
       <section className="border border-white/10 border-t-gold bg-panel/90 p-4 md:p-8">
-        <div className="grid items-start gap-6 md:grid-cols-[240px_minmax(0,1fr)] md:gap-10">
-          <div>
-            <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden shadow-[0_0_40px_rgba(212,162,78,0.16)] md:mx-0">
-              <div className="grid h-full grid-cols-2">
-                {sleeves.map((album, index) => (
-                  <Sleeve key={album?.id ?? `empty-${index}`} album={album} color={sheet.classColor} index={index} />
-                ))}
-              </div>
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background: `linear-gradient(160deg, ${sheet.classColor}99, transparent 52%, #0a0a0fcc)`,
-                }}
-              />
-              <div className="pointer-events-none absolute inset-2 border border-white/25" />
-            </div>
-            <p className="mt-3 text-center text-xs tracking-wide text-zinc-400 md:text-left">
-              <span className="font-display text-2xl text-zinc-100">{sheet.victories}</span> victories
-              <span className="mx-2 text-gold">·</span>
-              <span className="font-display text-2xl text-zinc-100">{sheet.escapes}</span> escapes
-            </p>
+        <div className="grid items-start gap-6 sm:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[220px_auto_minmax(0,1fr)] lg:gap-x-10 lg:gap-y-8">
+          <div className="sm:col-start-1 sm:row-start-1">
+            <ListenerPortrait color={sheet.classColor} name={sheet.displayName} relics={sheet.relics} body={sheet.body} size={220} />
+            <BodyPicker body={sheet.body} onPick={onBody} />
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 sm:col-start-2 sm:row-start-1 lg:col-start-3">
             <p className="text-[11px] tracking-[0.28em] text-gold">LISTENER</p>
             <h1 className="mt-1 break-words font-display text-5xl leading-none tracking-wide md:text-7xl">
               {sheet.displayName}
             </h1>
-            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tracking-[0.18em] uppercase">
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="inline-flex items-center gap-2" style={{ color: sheet.classColor }}>
                 <i className="h-2 w-2 rounded-full" style={{ background: sheet.classColor }} />
-                {sheet.className}
+                Level {sheet.level} {sheet.className}
               </span>
               {sheet.subclass ? (
                 <span className="tracking-normal text-zinc-400 normal-case">Subclass · {sheet.subclass}</span>
@@ -181,7 +176,12 @@ export function CharacterSheet({
                 <Tip label="DPS" text={dpsTooltip(stats, worn)} className="text-[10px] tracking-[0.28em] text-gold/80" />
                 <p className="mt-1">
                   <Tip
-                    label={<GoldAmount amount={sheet.echoes} labeled />}
+                    label={
+                      <span className="inline-flex items-center gap-1">
+                        <GoldMark className="h-3 w-3" />
+                        {sheet.echoes.toLocaleString()} GOLD
+                      </span>
+                    }
                     text={echoTooltip(stats, worn)}
                     className="inline-flex items-center text-[10px] tracking-[0.16em] text-gold"
                   />
@@ -197,13 +197,27 @@ export function CharacterSheet({
               />
             </div>
           </div>
+          <PaperDoll relics={sheet.relics} inventory={sheet.inventory} onEquip={onEquip} onUnequip={onUnequip} />
+          {sheet.badges.length > 0 ? (
+            <p className="text-xs tracking-[0.16em] text-gold sm:col-span-2 lg:col-span-3">{sheet.badges.join(" · ").toUpperCase()}</p>
+          ) : null}
         </div>
       </section>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <section className="border border-white/10 bg-panel/90 p-4 md:p-6">
-          <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">STATS</h2>
-          <ul className="mt-4 space-y-3">
+      <SheetTabs
+        tab={tab}
+        onTab={setTab}
+        alerts={{ stats: pointsLeft > 0, skills: picksLeft > 0 }}
+      />
+      <div
+        role="tabpanel"
+        id={`sheet-panel-${tab}`}
+        aria-labelledby={`sheet-tab-${tab}`}
+        className="border border-white/10 bg-panel/90 p-4 md:p-6"
+      >
+        {tab === "stats" ? (
+          <>
+          <ul className="space-y-3">
             {STAT_ROWS.map((row) => (
               <li key={row.key}>
                 <StatBar
@@ -246,7 +260,7 @@ export function CharacterSheet({
                 <button
                   key={entry.id}
                   type="button"
-                  disabled={entry.id === sheet.className || Boolean(sheet.switchReadyAt)}
+                  disabled={entry.id === sheet.className}
                   onClick={() => onSwitchClass(entry.id)}
                   className="border border-white/15 px-2 py-1 text-xs tracking-wide disabled:opacity-40"
                   style={{ color: entry.color }}
@@ -256,78 +270,20 @@ export function CharacterSheet({
               ))}
             </div>
           ) : null}
-          {sheet.switchReadyAt ? (
-            <p className="mt-2 text-xs text-zinc-500">Class change cools down in a day.</p>
-          ) : null}
-        </section>
-        <section className="border border-white/10 bg-panel/90 p-4 md:p-6">
-          <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">GENRE WEIGHT</h2>
-          <ul className="mt-4 space-y-3">
-            {sheet.genres.map((genre) => (
-              <li key={genre.family}>
-                <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-                  <span>{genre.family}</span>
-                  <span className="tabular-nums text-zinc-400">{Math.round(genre.share * 100)}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden bg-white/10">
-                  <div
-                    className="fill-bar h-full"
-                    style={{ width: `${genre.share * 100}%`, background: genre.color }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+          </>
+        ) : null}
+        {tab === "skills" ? (
+          <SkillTree
+            sheet={sheet}
+            pending={pending}
+            picksLeft={picksLeft}
+            problem={problem}
+            onToggle={onApplySkills ? toggleSkill : undefined}
+            onApply={pending.length > 0 ? () => void applySkills() : undefined}
+          />
+        ) : null}
+        {tab === "advanced" ? <Advanced sheet={sheet} /> : null}
       </div>
-
-      <SkillTree
-        sheet={sheet}
-        pending={pending}
-        picksLeft={picksLeft}
-        problem={problem}
-        onToggle={onApplySkills ? toggleSkill : undefined}
-        onApply={pending.length > 0 ? () => void applySkills() : undefined}
-      />
-
-      <section className="mt-4 border border-white/10 bg-panel/90 p-4 md:p-6">
-        <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">RELICS</h2>
-        <p className="mt-2 text-sm text-zinc-400">
-          Three equip slots. Drops add stats and an effect. Rare and legendary items have two effects. Mythic items are only made in the shop.{" "}
-          <Link to="/shop" className="text-gold">
-            Sell or upgrade extras in the shop.
-          </Link>
-        </p>
-        <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {sheet.relics.map((relic, index) =>
-            relic ? (
-              <li key={relic.id}>
-                <RelicCard relic={relic} action={onUnequip ? "Unequip" : undefined} onAction={onUnequip ? () => onUnequip(relic.id) : undefined} />
-              </li>
-            ) : (
-              <li
-                key={`open-${index}`}
-                className="flex aspect-square flex-col items-center justify-center gap-2 border border-dashed border-gold/35 text-zinc-500"
-              >
-                <SlotMark />
-                <span className="text-[10px] tracking-[0.2em] uppercase">Open</span>
-              </li>
-            ),
-          )}
-        </ul>
-        {sheet.badges.length > 0 ? (
-          <p className="mt-4 text-xs tracking-[0.16em] text-gold">{sheet.badges.join(" · ").toUpperCase()}</p>
-        ) : null}
-        {sheet.inventory.length > 0 ? (
-          <ul className="mt-4 grid gap-2">
-            {sheet.inventory.map((relic) => (
-              <li key={relic.id}>
-                <RelicCard relic={relic} action={onEquip ? "Equip" : undefined} onAction={onEquip ? () => onEquip(relic.id) : undefined} />
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
 
       <p className="mt-8 text-center text-xs text-zinc-600">
         <Link to="/debug" className="underline decoration-white/20 underline-offset-4 hover:text-zinc-300">
@@ -338,26 +294,51 @@ export function CharacterSheet({
   );
 }
 
-function Sleeve({ album, color, index }: { album: AlbumCover | null; color: string; index: number }) {
-  const wash = index % 2 === 0 ? color : "#d4a24e";
+function Advanced({ sheet }: { sheet: CharacterSheetModel }) {
+  const record = sheet.record ?? EMPTY_RECORD;
+  const rows = [
+    { label: "Listens", value: record.listens.toLocaleString() },
+    { label: "Victories", value: sheet.victories.toLocaleString() },
+    { label: "Escapes", value: sheet.escapes.toLocaleString() },
+    { label: "Faded", value: record.faded.toLocaleString() },
+    { label: "Highest echo", value: record.highestEcho.toLocaleString() },
+    { label: "Gold", value: <GoldAmount amount={sheet.echoes} /> },
+    { label: "Legacy points", value: sheet.legacyPoints.toLocaleString() },
+    { label: "Artists", value: record.artists.toLocaleString() },
+    { label: "Albums", value: record.albums.toLocaleString() },
+    { label: "Albums finished", value: record.albumsFinished.toLocaleString() },
+    { label: "Relics", value: record.relics.toLocaleString() },
+  ];
   return (
-    <div
-      className="relative min-h-0 bg-ink"
-      style={album?.imageUrl ? undefined : { background: `linear-gradient(145deg, ${wash}, #0a0a0f 72%)` }}
-    >
-      {album?.imageUrl ? (
-        <img
-          src={album.imageUrl}
-          alt={album.artistName ? `${album.name} — ${album.artistName}` : album.name}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full items-end p-2">
-          <span className="text-[10px] uppercase leading-tight tracking-wider text-white/80">
-            {album?.name ?? "Empty"}
-          </span>
-        </div>
-      )}
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <div>
+        <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">RECORD</h2>
+        <p className="mt-2 text-sm text-zinc-400">Listens are your Last.fm scrobbles. The highest echo is the deepest victory.</p>
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+          {rows.map((row) => (
+            <div key={row.label}>
+              <dt className="text-[11px] tracking-[0.18em] text-zinc-500">{row.label.toUpperCase()}</dt>
+              <dd className="mt-1 font-display text-3xl leading-none">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <div>
+        <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">GENRE WEIGHT</h2>
+        <ul className="mt-4 space-y-3">
+          {sheet.genres.map((genre) => (
+            <li key={genre.family}>
+              <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+                <span>{genre.family}</span>
+                <span className="tabular-nums text-zinc-400">{Math.round(genre.share * 100)}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden bg-white/10">
+                <div className="fill-bar h-full" style={{ width: `${genre.share * 100}%`, background: genre.color }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -419,9 +400,8 @@ function SkillTree({
   const open = purchasable(classIds, ownedNodes, ownedSkills);
 
   return (
-    <section className="mt-4 border border-white/10 bg-panel/90 p-4 md:p-6">
-      <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">SKILL TREE</h2>
-      <p className="mt-2 text-sm text-zinc-400">
+    <div>
+      <p className="text-sm text-zinc-400">
         {sheet.legacyPoints > 0
           ? `${sheet.legacyPoints} legacy ${sheet.legacyPoints === 1 ? "point" : "points"} from your listening history. `
           : ""}
@@ -485,7 +465,42 @@ function SkillTree({
         </button>
       ) : null}
       {problem ? <p className="mt-3 text-sm text-gold">{problem}</p> : null}
-    </section>
+    </div>
+  );
+}
+
+function SheetTabs({
+  tab,
+  onTab,
+  alerts,
+}: {
+  tab: SheetTab;
+  onTab: (tab: SheetTab) => void;
+  alerts: Partial<Record<SheetTab, boolean>>;
+}) {
+  return (
+    <div role="tablist" aria-label="Character" className="mt-4 flex flex-wrap border border-white/10 border-b-0 bg-panel/90">
+      {SHEET_TABS.map((entry) => {
+        const selected = tab === entry.id;
+        const alert = alerts[entry.id];
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            id={`sheet-tab-${entry.id}`}
+            aria-selected={selected}
+            aria-controls={`sheet-panel-${entry.id}`}
+            onClick={() => onTab(entry.id)}
+            className={`relative px-5 py-3 text-[11px] tracking-[0.28em] ${selected ? "text-gold" : "text-zinc-500 hover:text-zinc-200"}`}
+          >
+            {entry.label.toUpperCase()}
+            {alert ? <i className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-gold align-middle" aria-hidden /> : null}
+            {selected ? <span className="absolute inset-x-3 bottom-0 h-0.5 bg-gold" /> : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -546,10 +561,73 @@ function StatBar({
   );
 }
 
-function SlotMark() {
+function BodyPicker({ body, onPick }: { body: BodyType; onPick?: (body: BodyType) => Promise<void> | void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: MouseEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  async function pick(next: BodyType) {
+    if (next === body || !onPick) {
+      setOpen(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onPick(next);
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-      <path d="M14 2 L26 14 L14 26 L2 14 Z" fill="none" stroke="#d4a24e" strokeWidth="1.25" />
-    </svg>
+    <div className="relative mx-auto mt-3 max-w-[220px]" ref={root}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 border border-white/15 bg-ink/40 px-2 py-1 text-left text-xs tracking-wide text-zinc-200"
+        disabled={busy || !onPick}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Body: ${bodyName(body)}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <BodyChip body={body} />
+        <span>{bodyName(body)}</span>
+      </button>
+      {open ? (
+        <div className="absolute left-0 z-30 mt-1 max-h-64 w-full overflow-auto border border-white/15 bg-ink" role="listbox" aria-label="Body">
+          {BODY_TYPES.map((row) => (
+            <button
+              key={row.slug}
+              type="button"
+              role="option"
+              aria-selected={row.slug === body}
+              className={`flex w-full items-center gap-2 px-2 py-1 text-left text-xs hover:bg-white/5 ${row.slug === body ? "text-gold" : "text-zinc-200"}`}
+              disabled={busy}
+              onClick={() => void pick(row.slug)}
+            >
+              <BodyChip body={row.slug} />
+              <span>{row.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

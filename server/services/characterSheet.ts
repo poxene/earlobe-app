@@ -1,18 +1,24 @@
-import { buildCharacter, type AlbumCover, type CharacterSheetModel, type RelicView, type Stats } from "../../src/lib/game/character";
+import { buildCharacter, type AlbumCover, type CharacterSheetModel, type ListenerRecord, type RelicView, type Stats } from "../../src/lib/game/character";
 import { addStats, calculateDps, sumStats } from "../../src/lib/game/combat";
 import { fightDps, parseStoredEffects } from "../../src/lib/game/effects";
 import { treeEffects } from "../../src/lib/game/trees";
 import { classById, classForFamily } from "../../src/lib/game/classes";
 import { isRarity } from "../../src/lib/game/loot";
 import { masteryTitle } from "../../src/lib/game/titles";
+import { parseBody } from "../../src/lib/portrait/body";
+import { DOLL_SLOTS, itemFits, pieceOf } from "../../src/lib/portrait/gear";
 import { xpProgress } from "../../src/lib/game/xp";
 import { isRecord } from "../../src/lib/isRecord";
 import type { PortraitAlbum } from "../database";
 import { getSupabase } from "../supabase";
+import { parseRolls } from "./bonus";
+import { fetchPlaycount } from "./lastfmClient";
 import { topAlbums, topArtists } from "./listening";
 import { getProfile, type ProfileRecord } from "./profiles";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SCROBBLE_TTL_MS = 10 * 60 * 1000;
+const scrobbles = new Map<string, { count: number; at: number }>();
 
 type StoredCharacter = {
   activeClass: string;
@@ -29,8 +35,8 @@ type StoredCharacter = {
   skillPicks: number;
   treeNodes: string[];
   legacyPoints: number;
-  switchedAt: string | null;
   badges: string[];
+  body: string;
 };
 
 type WeightRow = {
@@ -143,13 +149,14 @@ export async function presentCharacter(userId: string): Promise<CharacterSheetMo
   if (!profile) throw new Error("unauthenticated");
   const character = await readCharacter(userId);
   if (!character) throw new Error("unauthenticated");
-  const [weights, relics, victories, escapes] = await Promise.all([
+  const [weights, relics, victories, escapes, record] = await Promise.all([
     readWeights(userId),
     readRelics(userId),
     countOutcomes(userId, "victory"),
     countOutcomes(userId, "escaped"),
+    readRecord(userId),
   ]);
-  return modelFromStored(profile, character, weights, relics, victories, escapes);
+  return modelFromStored(profile, character, weights, relics, victories, escapes, { ...record, relics: relics.length });
 }
 
 function modelFromStored(
@@ -159,6 +166,7 @@ function modelFromStored(
   relics: StoredRelic[],
   victories: number,
   escapes: number,
+  record: ListenerRecord,
 ): CharacterSheetModel {
   const useHours = weights.some((row) => row.hours30d > 0);
   const total = weights.reduce((sum, row) => sum + (useHours ? row.hours30d : row.share), 0) || 1;
@@ -172,10 +180,7 @@ function modelFromStored(
     character.stats,
     sumStats([character.bonus, tree.bonus, ...equipped.map((relic) => relic.bonuses)]),
   );
-  const slots: (RelicView | null)[] = [equipped[0] ?? null, equipped[1] ?? null, equipped[2] ?? null];
-  const switchReady = character.switchedAt
-    ? new Date(new Date(character.switchedAt).getTime() + DAY_MS).toISOString()
-    : null;
+  const slots = placeRelics(equipped);
   const thinHistory = character.albums.length === 0 && weights.every((row) => row.family === "Unmapped");
 
   return {
@@ -214,11 +219,13 @@ function modelFromStored(
       const entry = classById(id);
       return entry ? [{ id: entry.id, color: entry.color }] : [];
     }),
-    switchReadyAt: switchReady && new Date(switchReady).getTime() > Date.now() ? switchReady : null,
+    switchReadyAt: null,
     victories,
     escapes,
+    record,
     thinHistory,
     badges: character.badges,
+    body: parseBody(character.body),
   };
 }
 
@@ -226,7 +233,7 @@ async function readCharacter(userId: string): Promise<StoredCharacter | null> {
   const { data, error } = await getSupabase()
     .from("characters")
     .select(
-      "active_class, subclass, unlocked_classes, level, xp, stat_str, stat_agi, stat_int, stat_wis, stat_cha, stat_bonus_str, stat_bonus_agi, stat_bonus_int, stat_bonus_wis, stat_bonus_cha, unallocated_points, echoes, class_switched_at, badges, portrait, skills, skill_picks, tree_nodes, legacy_points",
+      "active_class, subclass, unlocked_classes, level, xp, stat_str, stat_agi, stat_int, stat_wis, stat_cha, stat_bonus_str, stat_bonus_agi, stat_bonus_int, stat_bonus_wis, stat_bonus_cha, unallocated_points, echoes, badges, portrait, skills, skill_picks, tree_nodes, legacy_points, body",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -259,8 +266,8 @@ async function readCharacter(userId: string): Promise<StoredCharacter | null> {
     skillPicks: data.skill_picks,
     treeNodes: data.tree_nodes ?? [],
     legacyPoints: data.legacy_points,
-    switchedAt: data.class_switched_at,
     badges: data.badges ?? [],
+    body: data.body,
   };
 }
 
@@ -278,7 +285,32 @@ async function readWeights(userId: string): Promise<WeightRow[]> {
   }));
 }
 
-type StoredRelic = RelicView & { equipped: boolean };
+type StoredRelic = RelicView & { equipped: boolean; equipSlot: number | null };
+
+function placeRelics(equipped: StoredRelic[]): (RelicView | null)[] {
+  const slots: (StoredRelic | null)[] = DOLL_SLOTS.map(() => null);
+  for (const relic of equipped) {
+    const index = relic.equipSlot;
+    if (index != null && itemFits(pieceOf(relic), index) && !slots[index]) slots[index] = relic;
+  }
+  return slots.map((relic) => (relic ? viewOf(relic) : null));
+}
+
+function viewOf(relic: StoredRelic): RelicView {
+  return {
+    id: relic.id,
+    name: relic.name,
+    gearSlug: pieceOf(relic).slug,
+    rarity: relic.rarity,
+    monsterType: relic.monsterType,
+    family: relic.family,
+    color: relic.color,
+    bonuses: relic.bonuses,
+    affixes: relic.affixes,
+    effects: relic.effects,
+    cut: relic.cut,
+  };
+}
 
 function mergeUnlocked(current: string[], generated: string[]): string[] {
   return [...new Set([...current, ...generated])];
@@ -287,7 +319,7 @@ function mergeUnlocked(current: string[], generated: string[]): string[] {
 async function readRelics(userId: string): Promise<StoredRelic[]> {
   const { data, error } = await getSupabase()
     .from("relics")
-    .select("id, name, monster_type, genre_family, rarity, stat_bonuses, effects, equipped")
+    .select("id, name, monster_type, genre_family, rarity, stat_bonuses, effects, equipped, equip_slot, gear_slug")
     .eq("user_id", userId)
     .order("acquired_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -299,17 +331,64 @@ async function readRelics(userId: string): Promise<StoredRelic[]> {
       {
         id: row.id,
         name: row.name,
+        gearSlug: row.gear_slug ?? "",
         rarity: row.rarity,
         monsterType: row.monster_type,
         family: family.family,
         color: family.color,
         bonuses: parseBonus(row.stat_bonuses),
+        affixes: parseRolls(row.stat_bonuses),
         effects: stored.effects,
         cut: stored.cut,
         equipped: row.equipped,
+        equipSlot: row.equip_slot,
       },
     ];
   });
+}
+
+async function readRecord(userId: string): Promise<ListenerRecord> {
+  const supabase = getSupabase();
+  const [listens, echo, faded, artists, albums, finished] = await Promise.all([
+    supabase.from("listening_events").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    supabase
+      .from("encounters")
+      .select("echo_depth")
+      .eq("user_id", userId)
+      .eq("outcome", "victory")
+      .order("echo_depth", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("encounters").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("outcome", "faded"),
+    supabase.from("codex_artists").select("artist_id", { count: "exact", head: true }).eq("user_id", userId),
+    supabase.from("codex_albums").select("album_id", { count: "exact", head: true }).eq("user_id", userId),
+    supabase.from("codex_albums").select("album_id", { count: "exact", head: true }).eq("user_id", userId).not("completed_at", "is", null),
+  ]);
+  for (const result of [listens, echo, faded, artists, albums, finished]) {
+    if (result.error) throw new Error(result.error.message);
+  }
+  return {
+    listens: (await scrobbleTotal(userId)) ?? listens.count ?? 0,
+    highestEcho: echo.data?.echo_depth ?? 0,
+    faded: faded.count ?? 0,
+    artists: artists.count ?? 0,
+    albums: albums.count ?? 0,
+    albumsFinished: finished.count ?? 0,
+    relics: 0,
+  };
+}
+
+async function scrobbleTotal(userId: string): Promise<number | null> {
+  const cached = scrobbles.get(userId);
+  if (cached && Date.now() - cached.at < SCROBBLE_TTL_MS) return cached.count;
+  try {
+    const count = await fetchPlaycount(userId);
+    if (count == null) return cached?.count ?? null;
+    scrobbles.set(userId, { count, at: Date.now() });
+    return count;
+  } catch {
+    return cached?.count ?? null;
+  }
 }
 
 async function countOutcomes(userId: string, outcome: "victory" | "escaped"): Promise<number> {

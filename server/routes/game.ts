@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 import { GameError, ReconnectRequired } from "../errors";
-import { allocatePoint, allocatePoints, castSkillOnFight, learnSkills, resetStats, setEquipped, switchClass } from "../services/actions";
+import { allocatePoint, allocatePoints, castSkillOnFight, learnSkills, resetStats, setBody, setEquipped, switchClass } from "../services/actions";
 import { sellRelic, upgradeRelics } from "../services/shop";
 import { loadCodex } from "../services/codexRead";
 import { syncListener } from "../services/gameSync";
@@ -84,6 +84,13 @@ gameRouter.post("/character/reset", (req, res, next) => {
   });
 });
 
+gameRouter.post("/character/body", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await setBody(userId, text(req.body, "body"));
+    return { ok: true };
+  });
+});
+
 gameRouter.post("/character/class", (req, res, next) => {
   void act(req, res, next, async (userId) => {
     await switchClass(userId, text(req.body, "classId"));
@@ -93,7 +100,7 @@ gameRouter.post("/character/class", (req, res, next) => {
 
 gameRouter.post("/relics/:id/equip", (req, res, next) => {
   void act(req, res, next, async (userId) => {
-    await setEquipped(userId, req.params.id, true);
+    await setEquipped(userId, req.params.id, true, slotIndex(req.body));
     return { ok: true };
   });
 });
@@ -145,6 +152,12 @@ function text(body: unknown, key: string): string {
 }
 
 const STAT_NAMES = ["str", "agi", "int", "wis", "cha"] as const;
+
+function slotIndex(body: unknown): number | undefined {
+  if (!isRecord(body) || body.slot === undefined) return undefined;
+  if (typeof body.slot !== "number" || !Number.isInteger(body.slot)) throw new GameError(400, "bad_slot");
+  return body.slot;
+}
 
 function statGrants(body: unknown): Partial<Record<(typeof STAT_NAMES)[number], number>> | null {
   if (!isRecord(body) || !isRecord(body.stats)) return null;

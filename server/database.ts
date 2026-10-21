@@ -76,6 +76,7 @@ export type Database = {
           tree_nodes: string[];
           legacy_points: number;
           legacy_awarded: boolean;
+          body: string;
         };
         Insert: {
           user_id: string;
@@ -96,6 +97,7 @@ export type Database = {
           legacy_points?: number;
           legacy_awarded?: boolean;
           tree_nodes?: string[];
+          body?: string;
         };
         Update: {
           active_class?: string;
@@ -127,6 +129,7 @@ export type Database = {
           tree_nodes?: string[];
           legacy_points?: number;
           legacy_awarded?: boolean;
+          body?: string;
         };
         Relationships: [];
       };
@@ -255,6 +258,8 @@ export type Database = {
         stat_bonuses: Json;
         effects: Json;
         equipped: boolean;
+        equip_slot: number | null;
+        gear_slug: string | null;
         acquired_at: string;
       }>;
       encounters: Table<{

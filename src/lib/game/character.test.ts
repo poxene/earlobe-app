@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildCharacter } from "./character";
+import { DOLL_SLOTS } from "../portrait/gear";
 import { calculateDps } from "./combat";
 import { cumulativeXpForLevel } from "./xp";
 import type { ProviderArtist } from "../music/provider";
@@ -69,7 +70,7 @@ test("hip-hop as a real second voice unlocks the rogue subclass label", () => {
   assert.equal(built.model.className, "Berserker");
   assert.equal(built.model.subclass, "Rogue");
   assert.equal(built.model.xpForNext, cumulativeXpForLevel(2));
-  assert.equal(built.model.relics.length, 3);
+  assert.equal(built.model.relics.length, DOLL_SLOTS.length);
 });
 
 test("split tags share one artist's weight", () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { craftRelic, isRarity, nextRarity, SELL_PRICE, type Rarity } from "../../src/lib/game/loot";
+import { craftRelic, isRarity, nextRarity, SELL_PRICE, statBonusPayload, type Rarity } from "../../src/lib/game/loot";
 import { GameError } from "../errors";
 import { getSupabase } from "../supabase";
 import { loadHero, saveHero } from "./hero";
@@ -46,10 +46,11 @@ export async function upgradeRelics(
     id,
     user_id: userId,
     name: crafted.name,
+    gear_slug: crafted.gearSlug,
     monster_type: crafted.monsterType,
     genre_family: crafted.genreFamily,
     rarity: crafted.rarity,
-    stat_bonuses: crafted.bonuses,
+    stat_bonuses: statBonusPayload(crafted),
     effects: { cut: crafted.cut, list: crafted.effects },
   });
   if (inserted.error) throw new Error(inserted.error.message);

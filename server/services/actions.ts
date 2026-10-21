@@ -1,4 +1,6 @@
 import { classById } from "../../src/lib/game/classes";
+import { parseBody } from "../../src/lib/portrait/body";
+import { DOLL_SLOTS, gearBySlug, gearForSalt, itemFits, slotIndex } from "../../src/lib/portrait/gear";
 import { castSkill, parseCooldowns, skillById, SKILL_COOLDOWN_MS } from "../../src/lib/game/skills";
 import { canSpend, nodeById, purchasable } from "../../src/lib/game/trees";
 import { respec } from "../../src/lib/game/xp";
@@ -36,37 +38,73 @@ export async function switchClass(userId: string, classId: string): Promise<void
   const entry = classById(classId);
   if (!entry || !hero.unlocked.includes(entry.id)) throw new GameError(409, "class_locked");
   if (entry.id === hero.activeClass) return;
-  const row = await getSupabase().from("characters").select("class_switched_at").eq("user_id", userId).maybeSingle();
-  if (row.error) throw new Error(row.error.message);
-  if (row.data?.class_switched_at) {
-    const ready = new Date(row.data.class_switched_at).getTime() + 86_400_000;
-    if (ready > Date.now()) throw new GameError(409, "class_cooldown");
-  }
   hero.activeClass = entry.id;
   await saveHero(hero);
-  const stamped = await getSupabase()
-    .from("characters")
-    .update({ class_switched_at: new Date().toISOString() })
-    .eq("user_id", userId);
-  if (stamped.error) throw new Error(stamped.error.message);
 }
 
-export async function setEquipped(userId: string, relicId: string, equipped: boolean): Promise<void> {
+export async function setEquipped(userId: string, relicId: string, equipped: boolean, slot?: number): Promise<void> {
   const supabase = getSupabase();
-  const relic = await supabase.from("relics").select("id").eq("id", relicId).eq("user_id", userId).maybeSingle();
+  const relic = await supabase
+    .from("relics")
+    .select("id, equipped, equip_slot, gear_slug")
+    .eq("id", relicId)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (relic.error) throw new Error(relic.error.message);
   if (!relic.data) throw new GameError(404, "relic_not_found");
-  if (equipped) {
-    const worn = await supabase
-      .from("relics")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("equipped", true);
-    if (worn.error) throw new Error(worn.error.message);
-    if ((worn.count ?? 0) >= 3) throw new GameError(409, "slots_full");
+  if (!equipped) {
+    const saved = await supabase.from("relics").update({ equipped: false, equip_slot: null }).eq("id", relicId).eq("user_id", userId);
+    if (saved.error) throw new Error(saved.error.message);
+    return;
   }
-  const saved = await supabase.from("relics").update({ equipped }).eq("id", relicId).eq("user_id", userId);
+  const piece = gearBySlug(relic.data.gear_slug) ?? gearForSalt(relic.data.id);
+  const worn = await supabase.from("relics").select("id, equip_slot, gear_slug").eq("user_id", userId).eq("equipped", true);
+  if (worn.error) throw new Error(worn.error.message);
+  const others = (worn.data ?? []).filter((row) => row.id !== relicId);
+  const open = slot ?? fittingOpen(piece, others.map((row) => row.equip_slot));
+  if (open === undefined || !itemFits(piece, open)) throw new GameError(409, "wrong_slot");
+  const weapon = slotIndex("weapon");
+  const offhand = slotIndex("offhand");
+  if (open === offhand) {
+    const main = others.find((row) => row.equip_slot === weapon);
+    const mainPiece = main ? gearBySlug(main.gear_slug) : null;
+    if (mainPiece?.twoHanded) throw new GameError(409, "offhand_blocked");
+  }
+  if (piece.twoHanded && open === weapon) {
+    const blocked = others.find((row) => row.equip_slot === offhand);
+    if (blocked) {
+      const cleared = await supabase.from("relics").update({ equipped: false, equip_slot: null }).eq("id", blocked.id).eq("user_id", userId);
+      if (cleared.error) throw new Error(cleared.error.message);
+    }
+  }
+  const occupant = others.find((row) => row.equip_slot === open);
+  const fromSlot = relic.data.equip_slot;
+  if (occupant && relic.data.equipped && fromSlot !== null && fromSlot !== open) {
+    const occupantPiece = gearBySlug(occupant.gear_slug) ?? gearForSalt(occupant.id);
+    const parked = await supabase.from("relics").update({ equip_slot: null }).eq("id", relicId).eq("user_id", userId);
+    if (parked.error) throw new Error(parked.error.message);
+    if (itemFits(occupantPiece, fromSlot)) {
+      const swapped = await supabase.from("relics").update({ equip_slot: fromSlot }).eq("id", occupant.id).eq("user_id", userId);
+      if (swapped.error) throw new Error(swapped.error.message);
+    } else {
+      const cleared = await supabase.from("relics").update({ equipped: false, equip_slot: null }).eq("id", occupant.id).eq("user_id", userId);
+      if (cleared.error) throw new Error(cleared.error.message);
+    }
+  } else if (occupant) {
+    const cleared = await supabase
+      .from("relics")
+      .update({ equipped: false, equip_slot: null })
+      .eq("id", occupant.id)
+      .eq("user_id", userId);
+    if (cleared.error) throw new Error(cleared.error.message);
+  }
+  const saved = await supabase.from("relics").update({ equipped: true, equip_slot: open, gear_slug: piece.slug }).eq("id", relicId).eq("user_id", userId);
   if (saved.error) throw new Error(saved.error.message);
+}
+
+function fittingOpen(piece: ReturnType<typeof gearForSalt>, taken: (number | null)[]): number | undefined {
+  const used = new Set(taken);
+  return DOLL_SLOTS.map((_, index) => index).find((index) => itemFits(piece, index) && !used.has(index));
 }
 
 export async function resetStats(userId: string): Promise<void> {
@@ -122,6 +160,7 @@ export async function castSkillOnFight(userId: string, skillId: string): Promise
   const hero = await loadHero(userId);
   const entry = skillById(skillId);
   if (!entry || !hero.skills.includes(entry.id)) throw new GameError(409, "skill_unknown");
+  const cooldownKey = entry.id;
   const supabase = getSupabase();
   const open = await supabase
     .from("encounters")
@@ -134,7 +173,7 @@ export async function castSkillOnFight(userId: string, skillId: string): Promise
   if (open.error) throw new Error(open.error.message);
   if (!open.data) throw new GameError(409, "no_fight");
   const cooldowns = parseCooldowns(open.data.skill_cooldowns);
-  const readyAt = cooldowns[entry.id] ?? 0;
+  const readyAt = cooldowns[cooldownKey] ?? 0;
   if (readyAt > Date.now()) throw new GameError(409, "skill_cooling");
   const cast = castSkill(entry, { hpMax: open.data.hp_max, dps: Number(open.data.dps_at_fight) });
   const nextReady = Date.now() + SKILL_COOLDOWN_MS;
@@ -143,7 +182,7 @@ export async function castSkillOnFight(userId: string, skillId: string): Promise
     .update({
       bonus_damage: open.data.bonus_damage + cast.damage,
       skill_id: entry.id,
-      skill_cooldowns: { ...cooldowns, [entry.id]: nextReady },
+      skill_cooldowns: { ...cooldowns, [cooldownKey]: nextReady },
       echo_bonus: open.data.echo_bonus + cast.echoes,
       grade_bump: open.data.grade_bump + cast.gradeSteps,
       drop_advantage: open.data.drop_advantage || cast.dropAdvantage,
@@ -155,4 +194,11 @@ export async function castSkillOnFight(userId: string, skillId: string): Promise
   if (saved.error) throw new Error(saved.error.message);
   if (!saved.data?.length) throw new GameError(409, "no_fight");
   return { name: entry.name, damage: cast.damage, readyAt: nextReady };
+}
+
+export async function setBody(userId: string, body: string): Promise<void> {
+  const next = parseBody(body);
+  if (next !== body) throw new GameError(400, "bad_body");
+  const { error } = await getSupabase().from("characters").update({ body: next }).eq("user_id", userId);
+  if (error) throw new Error(error.message);
 }

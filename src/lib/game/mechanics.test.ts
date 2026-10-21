@@ -105,6 +105,51 @@ test("the same salt always cuts the same relic, and salts disagree", () => {
   assert.ok(shapes.size > 1);
 });
 
+test("each affix rolls its own stat, and rarer items roll more of them", () => {
+  const counts = (rarity: "common" | "magic" | "rare" | "legendary" | "mythic", salt: string) =>
+    craftRelic({ genreFamily: "Hip-hop", rarity, salt }).affixes.length;
+  const commonStats = new Set<string>();
+  const commonAmounts = new Set<number>();
+  const magicCounts = new Set<number>();
+  const rareCounts = new Set<number>();
+  const legendaryCounts = new Set<number>();
+  for (let index = 0; index < 40; index += 1) {
+    const common = craftRelic({ genreFamily: "Hip-hop", rarity: "common", salt: `common-${index}` });
+    assert.equal(common.affixes.length, 1);
+    const row = common.affixes[0];
+    assert.ok(row);
+    assert.ok(row.amount >= 1 && row.amount <= 3);
+    assert.equal(common.bonuses[row.stat], row.amount);
+    commonStats.add(row.stat);
+    commonAmounts.add(row.amount);
+    magicCounts.add(counts("magic", `magic-${index}`));
+    rareCounts.add(counts("rare", `rare-${index}`));
+    legendaryCounts.add(counts("legendary", `legendary-${index}`));
+    const again = craftRelic({ genreFamily: "Hip-hop", rarity: "common", salt: `common-${index}` });
+    assert.deepEqual(again.affixes, common.affixes);
+  }
+  assert.ok(commonStats.size > 1);
+  assert.ok(commonAmounts.size > 1);
+  assert.deepEqual([...magicCounts].sort(), [1, 2]);
+  assert.deepEqual([...rareCounts].sort(), [2, 3]);
+  assert.deepEqual([...legendaryCounts].sort(), [3, 4, 5]);
+
+  let repeated = false;
+  const mythicCounts = new Set<number>();
+  for (let index = 0; index < 24; index += 1) {
+    const relic = craftRelic({ genreFamily: "Metal", rarity: "mythic", salt: `mythic-${index}` });
+    mythicCounts.add(relic.affixes.length);
+    assert.ok(relic.affixes.every((row) => row.amount >= 1 && row.amount <= 8));
+    const seen = new Map<string, number>();
+    for (const row of relic.affixes) seen.set(row.stat, (seen.get(row.stat) ?? 0) + 1);
+    if ([...seen.values()].some((count) => count > 1)) repeated = true;
+    const total = relic.affixes.reduce((sum, row) => sum + (row.stat === "int" ? row.amount : 0), 0);
+    assert.equal(relic.bonuses.int, total);
+  }
+  assert.deepEqual([...mythicCounts].sort(), [6, 7]);
+  assert.equal(repeated, true);
+});
+
 test("legendaries stay under one percent, and deeper echoes shift the table up", () => {
   const floor = rarityChances(0);
   const high = rarityChances(8);
@@ -121,7 +166,8 @@ test("legendaries stay under one percent, and deeper echoes shift the table up",
     for (let roll = 0; roll < 1; roll += 0.05) assert.notEqual(rarityFromRoll(roll, depth), "mythic");
   }
   const made = craftRelic({ genreFamily: "Metal", rarity: "mythic", salt: "three-idols" });
-  assert.equal(made.name, "Demon Myth");
+  assert.equal(made.name.startsWith("Demon "), true);
+  assert.equal(made.name.includes("Myth"), false);
   assert.equal(made.effects.length, 3);
   assert.equal(nextRarity("legendary"), "mythic");
   assert.equal(nextRarity("mythic"), null);

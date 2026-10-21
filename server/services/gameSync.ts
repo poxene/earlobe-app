@@ -13,7 +13,7 @@ import {
 import { dropLuck, echoPayout, openingDamage, settleGrade } from "../../src/lib/game/effects";
 import { parseCooldowns } from "../../src/lib/game/skills";
 import { treeEffects } from "../../src/lib/game/trees";
-import { echoReward, RARITY_RANK, rollRelic, type RelicDraft } from "../../src/lib/game/loot";
+import { echoReward, RARITY_RANK, rollRelic, statBonusPayload, type RelicDraft } from "../../src/lib/game/loot";
 import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying } from "../../src/lib/music/provider";
 import {
@@ -327,10 +327,11 @@ async function lootFor(
     id,
     user_id: hero.userId,
     name: relic.name,
+    gear_slug: relic.gearSlug,
     monster_type: relic.monsterType,
     genre_family: relic.genreFamily,
     rarity: relic.rarity,
-    stat_bonuses: relic.bonuses,
+    stat_bonuses: statBonusPayload(relic),
     effects: { cut: relic.cut, list: relic.effects },
   });
   if (inserted.error) throw new Error(inserted.error.message);
