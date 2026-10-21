@@ -93,7 +93,7 @@ function mapTrack(track: Record<string, unknown>): LastfmTrack[] {
       artistName,
       albumId: albumName ? albumId(artistName, albumName) : "",
       albumName,
-      imageUrl: lastfmImage(track.image, 64),
+      imageUrl: lastfmImage(track.image, 300),
       playedAt: playedAt(track.date),
       nowPlaying: attr?.nowplaying === "true",
     },

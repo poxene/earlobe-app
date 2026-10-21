@@ -5,6 +5,7 @@ import {
   monsterHp,
   trackTier,
   ledgerOutcome,
+  KILL_SLACK_MS,
   liveFightOutcome,
   progressOnClock,
   type FightResult,
@@ -166,6 +167,7 @@ async function tickLive(
   credit: Credit,
 ): Promise<void> {
   const open = await loadOpen(hero.userId);
+  if (open && playing && playing.trackId === open.trackId) await adoptLength(open, playing);
   if (open && (!playing || playing.trackId !== open.trackId)) {
     const progressMs = clockProgress(open);
     const killMs = timeToKill(open);
@@ -197,7 +199,8 @@ async function tickLive(
 
   const still = await loadOpen(hero.userId);
   const sameTrack = Boolean(open && playing && open.trackId === playing.trackId);
-  if (playing && !still && !sameTrack && !(await wonThisTrack(hero.userId, playing.trackId))) {
+  const won = playing ? await wonThisTrack(hero.userId, playing.trackId) : false;
+  if (playing && !still && !sameTrack && !won) {
     await spawnFight(hero, playing, 0, playing.progressMs, sessionKey(playing));
   }
   if (playing && qualifies(playing.progressMs, playing.durationMs) && !alreadyHeard(heard, playing.trackId, playedAtFrom(playing), playing.durationMs)) {
@@ -278,7 +281,12 @@ async function spawnFight(
     source_key: sourceKey,
     skill_cooldowns: skillCooldowns,
   });
-  if (inserted.error && inserted.error.code !== "23505") throw new Error(inserted.error.message);
+  if (!inserted.error) return;
+  if (inserted.error.code !== "23505") throw new Error(inserted.error.message);
+  const next = echoDepth + 1;
+  const songLeft = playing.durationMs <= 0 || anchorMs < playing.durationMs - KILL_SLACK_MS;
+  if (next > 7 || !songLeft) return;
+  await spawnFight(hero, playing, next, anchorMs, sourceKey, skillCooldowns);
 }
 
 async function closeFight(hero: Hero, open: OpenFight, fight: FightResult, credit: Credit): Promise<void> {
@@ -377,6 +385,27 @@ function chooseRelic(
   if (!first) return second;
   if (!second) return first;
   return RARITY_RANK[second.rarity] > RARITY_RANK[first.rarity] ? second : first;
+}
+
+//— a fight opened on the three-minute stand-in takes the catalog length once it arrives.
+async function adoptLength(open: OpenFight, playing: NowPlaying): Promise<void> {
+  const resized = Math.abs(playing.durationMs - open.durationMs) > 15_000;
+  const art = playing.albumImageUrl && playing.albumImageUrl !== open.image ? playing.albumImageUrl : null;
+  if (!resized && !art) return;
+  const hpMax = resized ? monsterHp(playing.durationMs, open.echoDepth) : open.hpMax;
+  const saved = await getSupabase()
+    .from("encounters")
+    .update({
+      ...(resized ? { duration_ms: playing.durationMs, hp_max: hpMax } : {}),
+      ...(art ? { album_image_url: art } : {}),
+    })
+    .eq("id", open.id);
+  if (saved.error) throw new Error(saved.error.message);
+  if (resized) {
+    open.durationMs = playing.durationMs;
+    open.hpMax = hpMax;
+  }
+  if (art) open.image = art;
 }
 
 function clockProgress(open: OpenFight, reportedMs = open.progressMs): number {

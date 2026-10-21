@@ -11,7 +11,7 @@
     "dev:web": "vite --port 5173 --strictPort",
     "dev:api": "tsx watch server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/music/normalize.test.ts src/lib/music/map.test.ts src/lib/music/mapNowPlaying.test.ts src/lib/music/mapLastfm.test.ts src/lib/game/character.test.ts src/lib/game/xp.test.ts src/lib/game/combat.test.ts src/lib/game/quests.test.ts src/lib/game/varieties.test.ts src/lib/game/mechanics.test.ts src/lib/game/materials.test.ts src/lib/game/achievements.test.ts src/lib/profile/handle.test.ts src/lib/game/trees.test.ts server/services/crypto.test.ts server/services/session.test.ts server/services/lastfmSign.test.ts",
+    "test": "node --import tsx --test src/lib/music/normalize.test.ts src/lib/music/map.test.ts src/lib/music/mapNowPlaying.test.ts src/lib/music/mapLastfm.test.ts src/lib/music/catalogMatch.test.ts src/lib/game/character.test.ts src/lib/game/xp.test.ts src/lib/game/combat.test.ts src/lib/game/quests.test.ts src/lib/game/varieties.test.ts src/lib/game/mechanics.test.ts src/lib/game/materials.test.ts src/lib/game/achievements.test.ts src/lib/profile/handle.test.ts src/lib/game/trees.test.ts server/services/crypto.test.ts server/services/session.test.ts server/services/lastfmSign.test.ts",
     "build": "vite build"
   },
   "dependencies": {
