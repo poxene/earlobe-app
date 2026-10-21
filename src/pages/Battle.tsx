@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CombatBars } from "@/components/CombatBars";
+import { GoldAmount } from "@/components/Gold";
 import { Frame } from "@/components/Frame";
 import { MonsterFigure } from "@/components/monsters/MonsterFigure";
 import { useGameSync } from "@/hooks/useGameSync";
@@ -219,7 +220,12 @@ function Log({ rows }: { rows: BattleRow[] }) {
                   <p className="truncate text-sm text-zinc-100">{variety.name}</p>
                   <p className="text-xs text-zinc-500">
                     {row.outcome === "victory" ? row.grade : row.outcome === "faded" ? "SONG ENDED" : "ESCAPED"}
-                    {row.echoes > 0 ? ` · ${row.echoes} echoes` : ""}
+                    {row.echoes > 0 ? (
+                      <>
+                        {" · "}
+                        <GoldAmount amount={row.echoes} labeled />
+                      </>
+                    ) : null}
                     {row.relicName ? ` · ${row.relicName}` : ""}
                   </p>
                 </div>

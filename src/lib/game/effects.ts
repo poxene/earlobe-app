@@ -10,11 +10,11 @@ export type EffectId = "opening" | "tempo" | "signal" | "poise" | "room" | "enco
 export const EFFECT_NAME: Record<EffectId, string> = {
   opening: "Opening hit",
   tempo: "Fight speed",
-  signal: "Bonus echoes",
+  signal: "Bonus gold",
   poise: "Grade leeway",
   room: "Listen XP",
   encore: "Echo damage",
-  hoard: "Echo payout",
+  hoard: "Gold payout",
 };
 
 export type RelicEffect = {
@@ -27,7 +27,7 @@ export type RelicEffect = {
 export type Cut = "attuned" | "focused" | "split" | "wild";
 
 export const CUT_LINE: Record<Cut, string> = {
-  attuned: "Stats follow this class.",
+  attuned: "Stats are spread across attributes.",
   focused: "All of the stats go to one attribute.",
   split: "Stats are split across two attributes.",
   wild: "Stats go to this class's lowest attribute.",
@@ -113,7 +113,7 @@ export function statTooltip(stat: keyof Stats, value: number, effects: RelicEffe
     const echoes = Math.floor(value / 15) + gear;
     return {
       name: "Intellect",
-      line: `20% of damage. Kills grant ${echoes} extra echoes.`,
+      line: `20% of damage. Kills grant ${echoes} extra gold.`,
     };
   }
   if (stat === "wis") {
@@ -139,7 +139,11 @@ export function dpsTooltip(stats: Stats, effects: RelicEffect[]): string {
 export function echoTooltip(stats: Stats, effects: RelicEffect[]): string {
   const extra = Math.floor(stats.int / 15) + sumMagnitude(effects, "signal");
   const hoard = sumMagnitude(effects, "hoard");
-  return `Echoes from a kill. Intellect and bonus-echo items add ${extra}.${hoard > 0 ? ` Echo payout items add ${hoard}%.` : ""}`;
+  return `Gold from a kill. Intellect and bonus-gold items add ${extra}.${hoard > 0 ? ` Gold payout items add ${hoard}%.` : ""}`;
+}
+
+export function effectDetail(detail: string): string {
+  return detail.replaceAll("echoes on a kill", "gold on a kill").replaceAll("Echoes from kills", "Gold from kills");
 }
 
 export function parseStoredEffects(value: unknown): { cut: Cut | null; effects: RelicEffect[] } {

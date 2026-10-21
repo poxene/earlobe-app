@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { RelicCard } from "@/components/RelicCard";
+import { GoldAmount } from "@/components/Gold";
 import { Tip } from "@/components/Tip";
 import { XpBar } from "@/components/XpBar";
 import type { AlbumCover, CharacterSheetModel, Stats } from "@/lib/game/character";
@@ -180,9 +181,9 @@ export function CharacterSheet({
                 <Tip label="DPS" text={dpsTooltip(stats, worn)} className="text-[10px] tracking-[0.28em] text-gold/80" />
                 <p className="mt-1">
                   <Tip
-                    label={`${sheet.echoes} ECHOES`}
+                    label={<GoldAmount amount={sheet.echoes} labeled />}
                     text={echoTooltip(stats, worn)}
-                    className="text-[10px] tracking-[0.16em] text-zinc-500"
+                    className="inline-flex items-center text-[10px] tracking-[0.16em] text-gold"
                   />
                 </p>
               </div>

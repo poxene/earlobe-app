@@ -164,11 +164,11 @@ const EFFECT_IDS: EffectId[] = ["opening", "tempo", "signal", "poise", "room", "
 const EFFECT_COPY: Record<EffectId, { name: string; detail: (magnitude: number) => string }> = {
   opening: { name: "Opening hit", detail: (magnitude) => `Opening hit deals an extra ${magnitude}% of max health.` },
   tempo: { name: "Fight speed", detail: (magnitude) => `+${magnitude}% damage for the whole fight.` },
-  signal: { name: "Bonus echoes", detail: (magnitude) => `+${magnitude} echoes on a kill.` },
+  signal: { name: "Bonus gold", detail: (magnitude) => `+${magnitude} gold on a kill.` },
   poise: { name: "Grade leeway", detail: (magnitude) => `Grades count an extra ${magnitude}% of the track as finished.` },
   room: { name: "Listen XP", detail: (magnitude) => `+${magnitude}% listen XP, and +${magnitude}% drop chance.` },
   encore: { name: "Echo damage", detail: (magnitude) => `+${magnitude}% damage against echoes.` },
-  hoard: { name: "Echo payout", detail: (magnitude) => `Echoes from kills are ${magnitude}% higher.` },
+  hoard: { name: "Gold payout", detail: (magnitude) => `Gold from kills is ${magnitude}% higher.` },
 };
 
 const MAGNITUDE: Record<EffectId, Record<Rarity, number>> = {

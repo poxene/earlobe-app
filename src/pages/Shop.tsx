@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Frame } from "@/components/Frame";
+import { GoldAmount } from "@/components/Gold";
 import { RelicCard } from "@/components/RelicCard";
 import { useCharacter } from "@/hooks/useCharacter";
 import { useGameSync } from "@/hooks/useGameSync";
@@ -45,7 +46,7 @@ export function ShopPage() {
       const body = await apiSend("/api/shop/sell", "POST", { relicId: id });
       const price = isRecord(body) && typeof body.price === "number" ? body.price : 0;
       setPicked((current) => current.filter((entry) => entry !== id));
-      setNote(`Sold for ${price} echoes.`);
+      setNote(`Sold for ${price} gold.`);
       await refresh();
     } catch (error) {
       setNote(error instanceof ApiError && error.code === "relic_equipped" ? "Unequip it first." : "Couldn't sell that.");
@@ -71,9 +72,13 @@ export function ShopPage() {
         <p className="text-[11px] tracking-[0.35em] text-zinc-500">SHOP</p>
         <h1 className="mt-1 font-display text-6xl tracking-wide">Shop</h1>
         <p className="mt-3 max-w-xl text-sm text-zinc-400">
-          Sell extra items for echoes. Turn in 3 of one rarity for 1 of the next rarity. Mythic items are only made this way. Equipped items stay on the character sheet.
+          Sell extra items for gold. Turn in 3 of one rarity for 1 of the next rarity. Mythic items are only made this way. Equipped items stay on the character.
         </p>
-        {sheet ? <p className="mt-4 text-sm tracking-[0.2em] text-gold">{sheet.echoes} ECHOES</p> : null}
+        {sheet ? (
+          <p className="mt-4 text-sm tracking-[0.16em]">
+            <GoldAmount amount={sheet.echoes} labeled />
+          </p>
+        ) : null}
         {note ? <p className="mt-3 text-sm text-gold">{note}</p> : null}
         {ready && next && rarity ? (
           <button type="button" onClick={() => void turnIn()} className="mt-4 border border-gold/50 px-4 py-2 text-sm text-gold">
@@ -92,7 +97,7 @@ export function ShopPage() {
                   relic={relic}
                   selected={picked.includes(relic.id)}
                   onSelect={() => toggle(relic.id, relic.rarity)}
-                  action={`Sell · ${SELL_PRICE[relic.rarity]} echoes`}
+                  action={`Sell · ${SELL_PRICE[relic.rarity]} gold`}
                   onAction={() => void sell(relic.id)}
                 />
               </li>

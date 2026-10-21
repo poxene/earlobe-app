@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGameSync } from "@/hooks/useGameSync";
 import { Frame } from "@/components/Frame";
+import { GoldMark } from "@/components/Gold";
 import { apiGet, apiSend } from "@/lib/api";
 import { isRecord } from "@/lib/isRecord";
 
@@ -43,10 +44,10 @@ export function QuestsPage() {
   async function reroll(id: string) {
     try {
       await apiSend(`/api/quests/${id}/reroll`, "POST");
-      setNote("Quest replaced. 100 echoes spent.");
+      setNote("Quest replaced. 100 gold spent.");
       await queryClient.invalidateQueries({ queryKey: ["quests"] });
     } catch {
-      setNote("Reroll needs 100 echoes, and only once this week.");
+      setNote("Reroll needs 100 gold, and only once this week.");
     }
   }
 
@@ -87,7 +88,9 @@ export function QuestsPage() {
                     </button>
                     {quest.objective.type !== "discovery" ? (
                       <button type="button" onClick={() => void reroll(quest.id)} className="text-sm text-zinc-400 hover:text-zinc-100">
-                        Reroll · 100 echoes
+                        <span className="inline-flex items-center gap-1">
+                          Reroll · <GoldMark className="h-3 w-3" /> 100 gold
+                        </span>
                       </button>
                     ) : null}
                   </div>

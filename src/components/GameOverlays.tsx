@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { GoldAmount } from "@/components/Gold";
 import type { AwaySummary, GameToast } from "@/lib/game/snapshot";
 
 const TOAST_MS = 4_000;
@@ -81,7 +82,7 @@ export function AwayModal({ summary, onClose }: { summary: AwaySummary; onClose:
       <h2 className="mt-2 font-display text-5xl leading-none">Progress while you were away</h2>
       <p className="mt-4 text-zinc-200">
         {summary.battles} battles: {summary.victories} victories, {summary.escapes} escaped. +{summary.xp} XP,{" "}
-        {summary.echoes} echoes
+        <GoldAmount amount={summary.echoes} labeled />
         {summary.relicName ? `, 1 relic (${summary.relicName})` : ""}.
       </p>
     </Modal>
