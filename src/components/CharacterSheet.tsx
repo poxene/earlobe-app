@@ -5,6 +5,7 @@ import { PaperDoll } from "@/components/PaperDoll";
 import { BodyChip, ListenerPortrait } from "@/components/portrait/ListenerPortrait";
 import { Tip } from "@/components/Tip";
 import { XpBar } from "@/components/XpBar";
+import { AchievementBoard } from "@/components/AchievementBoard";
 import { EMPTY_RECORD, type CharacterSheetModel, type Stats } from "@/lib/game/character";
 import { addStats, calculateDps, sumStats } from "@/lib/game/combat";
 import { dpsTooltip, echoTooltip, fightDps, statTooltip } from "@/lib/game/effects";
@@ -21,12 +22,13 @@ const STAT_ROWS: { key: keyof Stats; label: string }[] = [
 
 const EMPTY_STATS: Stats = { str: 0, agi: 0, int: 0, wis: 0, cha: 0 };
 
-type SheetTab = "stats" | "skills" | "advanced";
+type SheetTab = "stats" | "skills" | "advanced" | "achievements";
 
 const SHEET_TABS: { id: SheetTab; label: string }[] = [
   { id: "stats", label: "Attributes" },
   { id: "skills", label: "Skills" },
   { id: "advanced", label: "Stats" },
+  { id: "achievements", label: "Achievements" },
 ];
 
 export function CharacterSheet({
@@ -295,6 +297,15 @@ export function CharacterSheet({
           />
         ) : null}
         {tab === "advanced" ? <Advanced sheet={sheet} /> : null}
+        {tab === "achievements" ? (
+          <AchievementBoard
+            listens={(sheet.record ?? EMPTY_RECORD).listens}
+            victories={sheet.victories}
+            highestEcho={(sheet.record ?? EMPTY_RECORD).highestEcho}
+            albumsFinished={(sheet.record ?? EMPTY_RECORD).albumsFinished}
+            relics={sheet.relics}
+          />
+        ) : null}
       </div>
 
       <p className="mt-8 text-center text-xs text-zinc-600">
