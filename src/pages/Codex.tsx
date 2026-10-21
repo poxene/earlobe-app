@@ -273,7 +273,7 @@ function Genres({ rows }: { rows: Codex["genres"] }) {
   return (
     <div className="mt-6">
       <p className="max-w-xl text-sm text-zinc-400">
-        Classes are unlocked by listening to their respective genres. After an hour, a bar shows the way to five.
+        Classes are unlocked by listening to their respective genres. After an hour, the genre and its color show the way to five.
       </p>
       <ul className="mt-4 grid gap-3 sm:grid-cols-2">
         {rows.map((row, index) => (
@@ -282,8 +282,12 @@ function Genres({ rows }: { rows: Codex["genres"] }) {
               row.hours >= GENRE_REVEAL_HOURS ? (
                 <>
                   <p className="text-sm text-zinc-500">Locked</p>
+                  {row.family ? <p style={{ color: row.color ?? undefined }}>{row.family}</p> : null}
                   <div className="mt-3 h-1.5 bg-white/10">
-                    <div className="h-full bg-zinc-500" style={{ width: `${Math.min(100, (row.hours / row.target) * 100)}%` }} />
+                    <div
+                      className="h-full"
+                      style={{ width: `${Math.min(100, (row.hours / row.target) * 100)}%`, background: row.color ?? "#71717a" }}
+                    />
                   </div>
                   <p className="mt-1 text-xs text-zinc-500">
                     {row.hours.toFixed(1)} / {row.target} hours

@@ -6,6 +6,7 @@ import { getSupabase } from "../supabase";
 import { coverFor, rememberedCover, usableImage } from "./coverArt";
 
 const UNLOCK_HOURS = 5;
+const REVEAL_HOURS = 1;
 
 export async function loadCodex(userId: string) {
   const supabase = getSupabase();
@@ -57,10 +58,11 @@ export async function loadCodex(userId: string) {
       const entry = classForFamily(family);
       const listened = hours.get(family) ?? 0;
       const known = unlocked.has(entry.id) || entry.id === (character.data?.active_class ?? "");
+      const revealed = known || listened >= REVEAL_HOURS;
       return {
-        family: known ? family : null,
+        family: revealed ? family : null,
         className: known ? entry.id : null,
-        color: known ? entry.color : null,
+        color: revealed ? entry.color : null,
         hours: listened,
         target: UNLOCK_HOURS,
         unlocked: unlocked.has(entry.id),
