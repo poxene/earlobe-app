@@ -109,7 +109,7 @@ export function TownChat() {
   const [busy, setBusy] = useState(false);
   const [logHeight, setLogHeight] = useState(storedLogHeight);
   const log = useRef<HTMLDivElement>(null);
-  const dock = useRef<HTMLElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; height: number } | null>(null);
   const query = useTown();
   const messages = query.data?.messages ?? [];
@@ -177,27 +177,29 @@ export function TownChat() {
   }
 
   return (
-    <section ref={dock} className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink/95">
-      <div
-        role="slider"
-        aria-orientation="vertical"
-        aria-label="Chat height"
-        aria-valuemin={MIN_LOG}
-        aria-valuemax={MAX_LOG}
-        aria-valuenow={logHeight}
-        tabIndex={0}
-        onPointerDown={onDragStart}
-        onPointerMove={onDragMove}
-        onPointerUp={onDragEnd}
-        onPointerCancel={onDragEnd}
-        onKeyDown={onDragKey}
-        className="flex h-3 w-full cursor-ns-resize touch-none items-center justify-center"
-      >
-        <span className="h-1 w-16 rounded-full bg-white/30 transition-colors hover:bg-white/70" />
+    <div ref={dock} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-end gap-2 px-2 pb-2">
+      <div className="pointer-events-auto shrink-0 border border-white/10 bg-ink/95 p-2">
+        <NowPlayingDock />
       </div>
-      <div className="flex w-full items-end gap-3 px-3 pb-2">
-        <NowPlayingDock expanded={logHeight === MAX_LOG} />
-        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end">
+      <section className="pointer-events-auto flex min-w-0 flex-1 flex-col border border-white/10 bg-ink/95">
+        <div
+          role="slider"
+          aria-orientation="vertical"
+          aria-label="Chat height"
+          aria-valuemin={MIN_LOG}
+          aria-valuemax={MAX_LOG}
+          aria-valuenow={logHeight}
+          tabIndex={0}
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+          onKeyDown={onDragKey}
+          className="flex h-3 w-full cursor-ns-resize touch-none items-center justify-center"
+        >
+          <span className="h-1 w-16 rounded-full bg-white/30 transition-colors hover:bg-white/70" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-2 px-3 pb-2 sm:flex-row sm:items-end">
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 className="text-[10px] tracking-[0.28em] text-zinc-500">CHAT</h2>
             <div ref={log} className="mt-1 overflow-y-auto" style={{ height: logHeight }}>
@@ -234,9 +236,9 @@ export function TownChat() {
             </button>
           </form>
         </div>
-      </div>
-      {note ? <p className="px-3 pb-2 text-xs text-gold">{note}</p> : null}
-    </section>
+        {note ? <p className="px-3 pb-2 text-xs text-gold">{note}</p> : null}
+      </section>
+    </div>
   );
 }
 
