@@ -5,13 +5,12 @@ import { isRecord } from "@/lib/isRecord";
 
 //— stats keep their share of damage. each one also does a job the others do not.
 
-export type EffectId = "opening" | "tempo" | "signal" | "poise" | "room" | "encore" | "hoard";
+export type EffectId = "opening" | "tempo" | "signal" | "room" | "encore" | "hoard";
 
 export const EFFECT_NAME: Record<EffectId, string> = {
   opening: "Opening hit",
   tempo: "Fight speed",
   signal: "Bonus gold",
-  poise: "Grade leeway",
   room: "Listen XP",
   encore: "Echo damage",
   hoard: "Gold payout",
@@ -65,10 +64,6 @@ export function dropLuck(stats: Stats, effects: RelicEffect[]): number {
   return Math.min(0.2, stats.cha / 500 + sumMagnitude(effects, "room") / 100);
 }
 
-export function poiseFraction(stats: Stats, effects: RelicEffect[]): number {
-  return stats.wis / 2000 + sumMagnitude(effects, "poise") / 100;
-}
-
 export function echoPayout(base: number, stats: Stats, effects: RelicEffect[], extra: number): number {
   const hoard = 1 + sumMagnitude(effects, "hoard") / 100;
   const signal = sumMagnitude(effects, "signal") + Math.floor(stats.int / 15);
@@ -87,8 +82,8 @@ export function bumpGrade(grade: Grade, steps: number): Grade {
   return next ?? grade;
 }
 
-export function settleGrade(remaining: number, stats: Stats, effects: RelicEffect[], steps: number): Grade {
-  return bumpGrade(gradeForRemaining(remaining + poiseFraction(stats, effects)), steps);
+export function settleGrade(remaining: number, steps: number): Grade {
+  return bumpGrade(gradeForRemaining(remaining), steps);
 }
 
 export function statTooltip(stat: keyof Stats, value: number, effects: RelicEffect[]): { name: string; line: string } {
@@ -117,11 +112,7 @@ export function statTooltip(stat: keyof Stats, value: number, effects: RelicEffe
     };
   }
   if (stat === "wis") {
-    const gear = sumMagnitude(effects, "poise");
-    return {
-      name: "Wisdom",
-      line: `10% of damage. Grades count an extra ${(value / 20 + gear).toFixed(1)}% of the track as finished.`,
-    };
+    return { name: "Wisdom", line: "10% of damage." };
   }
   const room = sumMagnitude(effects, "room");
   return {
@@ -165,7 +156,7 @@ function parseEffect(value: unknown): RelicEffect[] {
 }
 
 function isEffectId(value: string): value is EffectId {
-  return ["opening", "tempo", "signal", "poise", "room", "encore", "hoard"].includes(value);
+  return ["opening", "tempo", "signal", "room", "encore", "hoard"].includes(value);
 }
 
 function isCut(value: unknown): value is Cut {

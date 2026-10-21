@@ -175,7 +175,7 @@ async function tickLive(
         echoDepth: open.echoDepth,
         hpMax: open.hpMax,
         outcome: "victory",
-        grade: graded(hero, open, remaining),
+        grade: graded(open, remaining),
         killMs,
         remainingFraction: remaining,
       }, credit);
@@ -238,7 +238,7 @@ async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, cred
     echoDepth: open.echoDepth,
     hpMax: open.hpMax,
     outcome: "victory",
-    grade: graded(hero, open, remaining),
+    grade: graded(open, remaining),
     killMs,
     remainingFraction: remaining,
   }, credit);
@@ -394,8 +394,8 @@ function timeToKill(open: OpenFight): number {
   return open.dps > 0 ? (hp / open.dps) * 1000 : Number.POSITIVE_INFINITY;
 }
 
-function graded(hero: Hero, open: OpenFight, remaining: number): Grade {
-  return settleGrade(remaining, heroStats(hero), hero.effects, open.gradeBump);
+function graded(open: OpenFight, remaining: number): Grade {
+  return settleGrade(remaining, open.gradeBump);
 }
 
 async function recordListen(

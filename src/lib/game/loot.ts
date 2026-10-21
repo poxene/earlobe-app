@@ -158,13 +158,12 @@ function draftRelic(genreFamily: string, rarity: Rarity, salt: string): RelicDra
 }
 
 const KEYS = ["str", "agi", "int", "wis", "cha"] as const;
-const EFFECT_IDS: EffectId[] = ["opening", "tempo", "signal", "poise", "room", "encore", "hoard"];
+const EFFECT_IDS: EffectId[] = ["opening", "tempo", "signal", "room", "encore", "hoard"];
 
 const EFFECT_COPY: Record<EffectId, { name: string; detail: (magnitude: number) => string }> = {
   opening: { name: "Opening hit", detail: (magnitude) => `Opening hit deals an extra ${magnitude}% of max health.` },
   tempo: { name: "Fight speed", detail: (magnitude) => `+${magnitude}% damage for the whole fight.` },
   signal: { name: "Bonus gold", detail: (magnitude) => `+${magnitude} gold on a kill.` },
-  poise: { name: "Grade leeway", detail: (magnitude) => `Grades count an extra ${magnitude}% of the track as finished.` },
   room: { name: "Listen XP", detail: (magnitude) => `+${magnitude}% listen XP, and +${magnitude}% drop chance.` },
   encore: { name: "Echo damage", detail: (magnitude) => `+${magnitude}% damage against echoes.` },
   hoard: { name: "Gold payout", detail: (magnitude) => `Gold from kills is ${magnitude}% higher.` },
@@ -174,7 +173,6 @@ const MAGNITUDE: Record<EffectId, Record<Rarity, number>> = {
   opening: { common: 2, magic: 4, rare: 6, legendary: 10, mythic: 14 },
   tempo: { common: 3, magic: 6, rare: 8, legendary: 12, mythic: 16 },
   signal: { common: 1, magic: 1, rare: 2, legendary: 4, mythic: 6 },
-  poise: { common: 1, magic: 1, rare: 2, legendary: 3, mythic: 5 },
   room: { common: 3, magic: 6, rare: 8, legendary: 12, mythic: 16 },
   encore: { common: 8, magic: 14, rare: 18, legendary: 28, mythic: 40 },
   hoard: { common: 10, magic: 18, rare: 25, legendary: 40, mythic: 60 },

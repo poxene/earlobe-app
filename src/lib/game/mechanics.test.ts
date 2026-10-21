@@ -28,11 +28,10 @@ test("an opening hit shortens the kill without changing a fight that has none", 
   assert.ok((opened[0]?.killMs ?? 0) < (plain[0]?.killMs ?? 0));
 });
 
-test("poise can lift a wire kill to clean, and a skill can lift it again", () => {
-  assert.equal(settleGrade(0.09, { ...ZERO, wis: 0 }, [], 0), "DOWN TO THE WIRE");
-  assert.equal(settleGrade(0.09, { ...ZERO, wis: 40 }, [], 0), "CLEAN");
-  assert.equal(settleGrade(0.09, ZERO, [], 1), "CLEAN");
-  assert.equal(settleGrade(0.4, ZERO, [], 1), "FLAWLESS");
+test("a skill can lift a wire kill to clean, and again to flawless", () => {
+  assert.equal(settleGrade(0.09, 0), "DOWN TO THE WIRE");
+  assert.equal(settleGrade(0.09, 1), "CLEAN");
+  assert.equal(settleGrade(0.4, 1), "FLAWLESS");
 });
 
 test("intellect and hoard both raise a kill's echoes", () => {
