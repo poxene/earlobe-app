@@ -3,6 +3,7 @@ import { classForFamily } from "../../src/lib/game/classes";
 import { GENRE_FAMILIES } from "../../src/lib/music/normalize";
 import { varietyFor, varietiesFor } from "../../src/lib/game/varieties";
 import { getSupabase } from "../supabase";
+import { coverFor, rememberedCover, usableImage } from "./coverArt";
 
 const UNLOCK_HOURS = 5;
 
@@ -41,7 +42,7 @@ export async function loadCodex(userId: string) {
       discoveredAt: row.discovered_at,
       listens: row.listen_count,
     })),
-    albums: (albums.data ?? []).map((row) => ({
+    albums: (await fillAlbumCovers(userId, albums.data ?? [])).map((row) => ({
       id: row.album_id,
       name: row.name,
       artistName: row.artist_name,
@@ -55,15 +56,15 @@ export async function loadCodex(userId: string) {
     genres: GENRE_FAMILIES.map((family) => {
       const entry = classForFamily(family);
       const listened = hours.get(family) ?? 0;
-      const known = unlocked.has(entry.id) || family === classForFamily(character.data?.active_class ?? "").family;
+      const known = unlocked.has(entry.id) || entry.id === (character.data?.active_class ?? "");
       return {
-        family,
-        className: entry.id,
-        color: entry.color,
+        family: known ? family : null,
+        className: known ? entry.id : null,
+        color: known ? entry.color : null,
         hours: listened,
         target: UNLOCK_HOURS,
         unlocked: unlocked.has(entry.id),
-        hidden: !known && listened <= 0,
+        hidden: !known,
       };
     }),
     bestiary: Object.values(MONSTERS).map((monster) => {
@@ -85,4 +86,34 @@ export async function loadCodex(userId: string) {
       };
     }),
   };
+}
+
+async function fillAlbumCovers<T extends { album_id: string; name: string; artist_name: string; image_url: string | null }>(
+  userId: string,
+  rows: T[],
+): Promise<T[]> {
+  const supabase = getSupabase();
+  let lookups = 0;
+  const filled: T[] = [];
+  for (const row of rows) {
+    let image = usableImage(row.image_url);
+    if (!image) {
+      const remembered = rememberedCover(row.artist_name, row.name);
+      if (remembered !== undefined) image = remembered;
+      else if (lookups < 4) {
+        lookups += 1;
+        image = await coverFor(row.artist_name, row.name);
+        if (image) {
+          const saved = await supabase
+            .from("codex_albums")
+            .update({ image_url: image })
+            .eq("user_id", userId)
+            .eq("album_id", row.album_id);
+          if (saved.error) throw new Error(saved.error.message);
+        }
+      }
+    }
+    filled.push({ ...row, image_url: image });
+  }
+  return filled;
 }

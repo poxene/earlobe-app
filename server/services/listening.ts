@@ -6,6 +6,7 @@ import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying, ProviderArtist } from "../../src/lib/music/provider";
 import { getSupabase } from "../supabase";
 import { loadArtists } from "./catalog";
+import { cachedCover, coverFor, usableImage } from "./coverArt";
 import { callForUser, lastfmCall } from "./lastfmClient";
 
 //— a scrobble means the track was heard. when last.fm has no duration, three minutes still qualifies.
@@ -69,6 +70,8 @@ export async function listenerActivity(
 ): Promise<{ nowPlaying: NowPlaying | null; history: HistoryPlay[] }> {
   const payload = await callForUser(userId, "user.getRecentTracks", { limit: "50" });
   const mapped = mapLastfmRecent(payload);
+  const lead = mapped.nowPlaying ?? mapped.history[0];
+  if (lead?.albumName && !usableImage(lead.imageUrl)) await coverFor(lead.artistName, lead.albumName);
   const history: HistoryPlay[] = [];
   for (const track of mapped.history) {
     if (!track.playedAt) continue;
@@ -80,7 +83,7 @@ export async function listenerActivity(
       artistNames: [track.artistName],
       albumId: track.albumId,
       albumName: track.albumName,
-      albumImageUrl: track.imageUrl,
+      albumImageUrl: albumImage(track),
       playedAt: track.playedAt,
       durationMs: await durationFor(track, listing),
       tracksTotal: listing?.ids.length ?? 0,
@@ -148,7 +151,7 @@ async function toNowPlaying(userId: string, track: LastfmTrack): Promise<NowPlay
     artistIds: [track.artistId],
     albumId: track.albumId,
     albumName: track.albumName,
-    albumImageUrl: track.imageUrl,
+    albumImageUrl: albumImage(track),
     durationMs,
     progressMs: await progressFromEncounter(userId, track.trackId, durationMs),
     isPlaying: true,
@@ -217,6 +220,10 @@ async function rememberAlbum(artistName: string, albumName: string): Promise<Alb
     missingAlbums.add(id);
     return null;
   }
+}
+
+function albumImage(track: LastfmTrack): string | null {
+  return usableImage(track.imageUrl) ?? (track.albumName ? cachedCover(track.artistName, track.albumName) : null);
 }
 
 function parseAlbum(payload: unknown, artistName: string): AlbumListing | null {
