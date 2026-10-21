@@ -1,10 +1,13 @@
 import { Router, type Response } from "express";
 import { GameError, ReconnectRequired } from "../errors";
-import { allocatePoint, allocatePoints, castSkillOnFight, learnSkills, resetStats, setEquipped, switchClass } from "../services/actions";
+import { allocatePoint, allocatePoints, castSkillOnFight, learnSkills, resetStats, setBody, setEquipped, switchClass } from "../services/actions";
+import { combineStack, splitStack } from "../services/materials";
 import { sellRelic, upgradeRelics } from "../services/shop";
 import { loadCodex } from "../services/codexRead";
 import { syncListener } from "../services/gameSync";
 import { createParty, joinParty, leaveParty, loadFeed, loadParty } from "../services/party";
+import { loadTown, postTownMessage } from "../services/town";
+import { setDisplayName } from "../services/profiles";
 import { beginQuest } from "../services/playback";
 import { listQuests, rerollQuest } from "../services/questBoard";
 import { isRecord } from "../../src/lib/isRecord";
@@ -32,6 +35,14 @@ gameRouter.post("/quests/:id/reroll", (req, res, next) => {
     await rerollQuest(userId, req.params.id);
     return { ok: true };
   });
+});
+
+gameRouter.get("/town", (req, res, next) => {
+  void act(req, res, next, async (userId) => loadTown(userId));
+});
+
+gameRouter.post("/town/chat", (req, res, next) => {
+  void act(req, res, next, async (userId) => postTownMessage(userId, text(req.body, "body")));
 });
 
 gameRouter.get("/party", (req, res, next) => {
@@ -74,7 +85,10 @@ gameRouter.post("/character/skill", (req, res, next) => {
 });
 
 gameRouter.post("/battle/skill", (req, res, next) => {
-  void act(req, res, next, async (userId) => castSkillOnFight(userId, text(req.body, "skillId")));
+  void act(req, res, next, async (userId) => {
+    const allyId = text(req.body, "allyId");
+    return castSkillOnFight(userId, text(req.body, "skillId"), allyId || undefined);
+  });
 });
 
 gameRouter.post("/character/reset", (req, res, next) => {
@@ -82,6 +96,17 @@ gameRouter.post("/character/reset", (req, res, next) => {
     await resetStats(userId);
     return { ok: true };
   });
+});
+
+gameRouter.post("/character/body", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await setBody(userId, text(req.body, "body"));
+    return { ok: true };
+  });
+});
+
+gameRouter.post("/character/name", (req, res, next) => {
+  void act(req, res, next, async (userId) => ({ displayName: await setDisplayName(userId, text(req.body, "name")) }));
 });
 
 gameRouter.post("/character/class", (req, res, next) => {
@@ -93,7 +118,7 @@ gameRouter.post("/character/class", (req, res, next) => {
 
 gameRouter.post("/relics/:id/equip", (req, res, next) => {
   void act(req, res, next, async (userId) => {
-    await setEquipped(userId, req.params.id, true);
+    await setEquipped(userId, req.params.id, true, slotIndex(req.body));
     return { ok: true };
   });
 });
@@ -111,6 +136,20 @@ gameRouter.post("/shop/sell", (req, res, next) => {
 
 gameRouter.post("/shop/upgrade", (req, res, next) => {
   void act(req, res, next, async (userId) => upgradeRelics(userId, idList(req.body)));
+});
+
+gameRouter.post("/materials/split", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await splitStack(userId, text(req.body, "stackId"), count(req.body, "quantity"));
+    return { ok: true };
+  });
+});
+
+gameRouter.post("/materials/combine", (req, res, next) => {
+  void act(req, res, next, async (userId) => {
+    await combineStack(userId, text(req.body, "stackId"));
+    return { ok: true };
+  });
 });
 
 function act(
@@ -137,6 +176,18 @@ function act(
     }
     next(error);
   });
+}
+
+function slotIndex(body: unknown): number | undefined {
+  if (!isRecord(body) || body.slot === undefined) return undefined;
+  if (typeof body.slot !== "number" || !Number.isInteger(body.slot)) throw new GameError(400, "bad_slot");
+  return body.slot;
+}
+
+function count(body: unknown, key: string): number {
+  const value = isRecord(body) ? body[key] : undefined;
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new GameError(400, "bad_quantity");
+  return value;
 }
 
 function text(body: unknown, key: string): string {

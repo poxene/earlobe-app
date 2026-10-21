@@ -43,7 +43,7 @@ export function Debug() {
         ) : null}
         <p className="mt-6 text-sm">
           <Link to="/" className="text-gold underline underline-offset-4">
-            Back to the sheet
+            Back to the character
           </Link>
         </p>
       </main>

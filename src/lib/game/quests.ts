@@ -1,3 +1,5 @@
+import { parseEntityId } from "@/lib/music/lastfmIds";
+
 export type DiscoveryObjective = {
   type: "discovery";
   families: string[];
@@ -24,6 +26,8 @@ export type SocialObjective = {
   type: "social";
   trackId: string;
   trackName: string;
+  artistName: string;
+  albumName: string;
   friendName: string;
   friendId: string;
 };
@@ -44,6 +48,17 @@ export type AlbumFact = {
   tracksTotal: number;
 };
 
+// A single or a short EP is not an album. Five tracks is the shortest release that can be finished.
+export const MIN_ALBUM_TRACKS = 5;
+
+export function albumHeard(tracksPlayed: number, tracksTotal: number): boolean {
+  return tracksTotal > 0 && tracksPlayed >= tracksTotal;
+}
+
+export function albumFinished(tracksPlayed: number, tracksTotal: number): boolean {
+  return tracksTotal >= MIN_ALBUM_TRACKS && albumHeard(tracksPlayed, tracksTotal);
+}
+
 export function questProgress(
   objective: QuestObjective,
   listens: ListenFact[],
@@ -51,10 +66,7 @@ export function questProgress(
 ): { current: number; target: number; completed: boolean } {
   if (objective.type === "discovery") {
     const done = albums.filter(
-      (album) =>
-        album.tracksTotal > 0 &&
-        album.tracksPlayed >= album.tracksTotal &&
-        objective.families.includes(album.family),
+      (album) => albumFinished(album.tracksPlayed, album.tracksTotal) && objective.families.includes(album.family),
     ).length;
     return pack(done, objective.target);
   }
@@ -68,22 +80,63 @@ export function questProgress(
     const heard = listens.some((row) => row.trackId === objective.trackId);
     return pack(heard ? 1 : 0, 1);
   }
-  return pack(ritualComplete(objective.trackIds, listens) ? 1 : 0, 1);
+  const reached = ritualReached(objective.trackIds, listens);
+  const progress = pack(reached, objective.trackIds.length || 1);
+  if (objective.trackIds.length < MIN_ALBUM_TRACKS) return { ...progress, completed: false };
+  return progress;
 }
 
 export function ritualComplete(trackIds: string[], listens: ListenFact[]): boolean {
-  if (trackIds.length === 0) return false;
+  return trackIds.length >= MIN_ALBUM_TRACKS && ritualReached(trackIds, listens) === trackIds.length;
+}
+
+export function ritualReached(trackIds: string[], listens: ListenFact[]): number {
+  if (trackIds.length === 0) return 0;
   const ordered = [...listens].sort((a, b) => a.playedAt.localeCompare(b.playedAt));
   let cursor = 0;
+  let best = 0;
   for (const row of ordered) {
-    if (row.trackId === trackIds[cursor]) {
+    const expected = trackIds[cursor];
+    if (expected && sameTrack(row.trackId, expected)) {
       cursor += 1;
-      if (cursor === trackIds.length) return true;
+      best = Math.max(best, cursor);
+      if (cursor === trackIds.length) return trackIds.length;
       continue;
     }
-    if (cursor > 0) cursor = row.trackId === trackIds[0] ? 1 : 0;
+    if (cursor > 0) {
+      cursor = sameTrack(row.trackId, trackIds[0] ?? "") ? 1 : 0;
+      best = Math.max(best, cursor);
+    }
   }
-  return false;
+  return best;
+}
+
+function sameTrack(a: string, b: string): boolean {
+  if (a === b) return true;
+  const left = foldedTrack(a);
+  const right = foldedTrack(b);
+  if (!left || !right) return false;
+  return left.artist === right.artist && left.title === right.title;
+}
+
+function foldedTrack(id: string): { artist: string; title: string } | null {
+  const parsed = parseEntityId(id);
+  if (!parsed || parsed.kind !== "track" || parsed.parts.length < 2) return null;
+  const artist = parsed.parts[0];
+  if (!artist) return null;
+  return { artist: foldTitle(artist), title: foldTitle(parsed.parts.slice(1).join("/")) };
+}
+
+function foldTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function pack(current: number, target: number): { current: number; target: number; completed: boolean } {
@@ -118,6 +171,8 @@ export function parseObjective(value: unknown): QuestObjective | null {
       type: "social",
       trackId: value.trackId,
       trackName: typeof value.trackName === "string" ? value.trackName : "a friend's track",
+      artistName: typeof value.artistName === "string" ? value.artistName : "",
+      albumName: typeof value.albumName === "string" ? value.albumName : "",
       friendName: typeof value.friendName === "string" ? value.friendName : "a friend",
       friendId: typeof value.friendId === "string" ? value.friendId : "",
     };

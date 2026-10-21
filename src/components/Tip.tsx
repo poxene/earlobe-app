@@ -1,6 +1,6 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
-export function Tip({ label, text, className }: { label: string; text: string; className?: string }) {
+export function Tip({ label, text, className }: { label: ReactNode; text: string; className?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (

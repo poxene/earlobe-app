@@ -3,6 +3,7 @@ import { GENRE_FAMILIES } from "../../src/lib/music/normalize";
 import { isRecord } from "../../src/lib/isRecord";
 import { lastfmSearch, lastfmUrl } from "../../src/lib/music/lastfmIds";
 import {
+  MIN_ALBUM_TRACKS,
   parseObjective,
   questProgress,
   type AlbumFact,
@@ -198,7 +199,7 @@ async function createRitual(userId: string, expires: string): Promise<boolean> {
   const album = (recent.data ?? []).find((row) => row.album_id);
   if (!album?.album_id) return false;
   const trackIds = await albumTrackIds(album.album_id);
-  if (trackIds.length < 2) return false;
+  if (trackIds.length < MIN_ALBUM_TRACKS) return false;
   await insertQuest(userId, {
     type: "ritual",
     title: "Full album",
@@ -220,7 +221,7 @@ async function createSocial(userId: string, expires: string): Promise<boolean> {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const theirs = await getSupabase()
     .from("listening_events")
-    .select("user_id, track_id, track_name, played_at")
+    .select("user_id, track_id, track_name, artist_names, album_name, played_at")
     .in("user_id", others)
     .gte("played_at", since)
     .order("played_at", { ascending: false })
@@ -234,16 +235,21 @@ async function createSocial(userId: string, expires: string): Promise<boolean> {
   const profile = await getSupabase().from("profiles").select("display_name").eq("id", pick.user_id).maybeSingle();
   if (profile.error) throw new Error(profile.error.message);
   const friendName = profile.data?.display_name ?? "A friend";
+  const artistName = (pick.artist_names ?? []).filter(Boolean).join(", ");
+  const albumName = pick.album_name || "";
+  const credit = trackCredit(artistName, albumName);
   await insertQuest(userId, {
     type: "social",
     title: "Party track",
-    description: `${friendName} played ${pick.track_name}. Play it past the halfway mark.`,
+    description: `${friendName} played ${pick.track_name}${credit ? ` ${credit}` : ""}. Play it past the halfway mark.`,
     xpReward: 50,
     expires,
     objective: {
       type: "social",
       trackId: pick.track_id,
       trackName: pick.track_name,
+      artistName,
+      albumName,
       friendName,
       friendId: pick.user_id,
     },
@@ -285,7 +291,7 @@ async function loadQuestRows(userId: string): Promise<QuestRow[]> {
   if (quests.error) throw new Error(quests.error.message);
   const progress = await supabase.from("quest_progress").select("quest_id, progress, completed_at").eq("user_id", userId);
   if (progress.error) throw new Error(progress.error.message);
-  return (quests.data ?? []).flatMap((row) => {
+  const rows = (quests.data ?? []).flatMap((row) => {
     const objective = parseObjective(row.objective);
     if (!objective) return [];
     const state = progress.data?.find((item) => item.quest_id === row.id);
@@ -304,6 +310,43 @@ async function loadQuestRows(userId: string): Promise<QuestRow[]> {
         completedAt: state?.completed_at ?? null,
       },
     ];
+  });
+  return fillTrackCredits(rows);
+}
+
+function trackCredit(artistName: string, albumName: string): string {
+  return [artistName ? `by ${artistName}` : "", albumName ? `on ${albumName}` : ""].filter(Boolean).join(" ");
+}
+
+async function fillTrackCredits(rows: QuestRow[]): Promise<QuestRow[]> {
+  const missing = rows.flatMap((row) => {
+    if (row.objective.type !== "social" || !row.objective.friendId) return [];
+    if (row.objective.artistName && row.objective.albumName) return [];
+    return [row];
+  });
+  if (missing.length === 0) return rows;
+  const friendIds = [...new Set(missing.flatMap((row) => (row.objective.type === "social" ? [row.objective.friendId] : [])))];
+  const trackIds = [...new Set(missing.flatMap((row) => (row.objective.type === "social" ? [row.objective.trackId] : [])))];
+  const found = await getSupabase()
+    .from("listening_events")
+    .select("user_id, track_id, artist_names, album_name")
+    .in("user_id", friendIds)
+    .in("track_id", trackIds)
+    .limit(40);
+  if (found.error) throw new Error(found.error.message);
+  return rows.map((row) => {
+    const objective = row.objective;
+    if (objective.type !== "social" || (objective.artistName && objective.albumName)) return row;
+    const hit = (found.data ?? []).find((event) => event.user_id === objective.friendId && event.track_id === objective.trackId);
+    if (!hit) return row;
+    return {
+      ...row,
+      objective: {
+        ...objective,
+        artistName: objective.artistName || (hit.artist_names ?? []).filter(Boolean).join(", "),
+        albumName: objective.albumName || hit.album_name || "",
+      },
+    };
   });
 }
 

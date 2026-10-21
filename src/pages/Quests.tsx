@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGameSync } from "@/hooks/useGameSync";
 import { Frame } from "@/components/Frame";
+import { GoldMark } from "@/components/Gold";
 import { apiGet, apiSend } from "@/lib/api";
 import { isRecord } from "@/lib/isRecord";
 
@@ -13,7 +14,7 @@ type Quest = {
   current: number;
   target: number;
   completedAt: string | null;
-  objective: { type: string };
+  objective: { type: string; artistName?: string; albumName?: string };
 };
 
 export function QuestsPage() {
@@ -43,10 +44,10 @@ export function QuestsPage() {
   async function reroll(id: string) {
     try {
       await apiSend(`/api/quests/${id}/reroll`, "POST");
-      setNote("Quest replaced. 100 echoes spent.");
+      setNote("Quest replaced. 100 gold spent.");
       await queryClient.invalidateQueries({ queryKey: ["quests"] });
     } catch {
-      setNote("Reroll needs 100 echoes, and only once this week.");
+      setNote("Reroll needs 100 gold, and only once this week.");
     }
   }
 
@@ -70,6 +71,13 @@ export function QuestsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-display text-3xl tracking-wide">{quest.title}</h2>
+                    {quest.objective.type === "social" && (quest.objective.artistName || quest.objective.albumName) ? (
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {quest.objective.artistName ? <span>by {quest.objective.artistName}</span> : null}
+                        {quest.objective.artistName && quest.objective.albumName ? " " : null}
+                        {quest.objective.albumName ? <span>on {quest.objective.albumName}</span> : null}
+                      </p>
+                    ) : null}
                     <p className="mt-1 max-w-xl text-sm text-zinc-300">{quest.description}</p>
                   </div>
                   <p className="text-sm text-gold">+{quest.xpReward} XP</p>
@@ -87,7 +95,9 @@ export function QuestsPage() {
                     </button>
                     {quest.objective.type !== "discovery" ? (
                       <button type="button" onClick={() => void reroll(quest.id)} className="text-sm text-zinc-400 hover:text-zinc-100">
-                        Reroll · 100 echoes
+                        <span className="inline-flex items-center gap-1">
+                          Reroll · <GoldMark className="h-3 w-3" /> 100 gold
+                        </span>
                       </button>
                     ) : null}
                   </div>

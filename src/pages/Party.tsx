@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGameSync } from "@/hooks/useGameSync";
 import { Frame } from "@/components/Frame";
-import { apiGet, apiSend } from "@/lib/api";
+import { ApiError, apiGet, apiSend } from "@/lib/api";
 import { classById } from "@/lib/game/classes";
 import { isRecord } from "@/lib/isRecord";
+import { profilePath } from "@/lib/profile/handle";
 
 type Member = {
   userId: string;
@@ -49,8 +51,12 @@ export function PartyPage() {
       await apiSend("/api/party/join", "POST", { code });
       setNote("You're in.");
       await queryClient.invalidateQueries({ queryKey: ["party"] });
-    } catch {
-      setNote("That invite code doesn't match a party.");
+    } catch (error) {
+      setNote(
+        error instanceof ApiError && error.code === "party_full"
+          ? "That party already has 3 listeners."
+          : "That invite code doesn't match a party.",
+      );
     }
   }
 
@@ -70,15 +76,24 @@ export function PartyPage() {
         {query.isPending ? <p className="mt-6 text-zinc-400">Loading party.</p> : null}
         {party ? (
           <>
-            <p className="mt-4 text-sm tracking-[0.2em] text-gold">CODE {party.inviteCode}</p>
+            <p className="mt-4 text-sm tracking-[0.2em] text-gold">
+              CODE {party.inviteCode}
+              <span className="ml-3 text-zinc-500">
+                {party.members.length} / 3
+              </span>
+            </p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {party.members.map((member) => {
                 const color = classById(member.className)?.color ?? "#64748b";
                 return (
                   <li key={member.userId} className="border border-white/10 bg-panel/90 p-4">
-                    <p className="font-display text-3xl tracking-wide">{member.name}</p>
+                    <p className="font-display text-3xl tracking-wide">
+                      <Link to={profilePath(member.name)} className="hover:text-gold">
+                        {member.name}
+                      </Link>
+                    </p>
                     <p className="text-sm" style={{ color }}>
-                      {member.className} · L{String(member.level).padStart(2, "0")}
+                      Level {member.level} {member.className}
                     </p>
                     <p className="mt-2 text-sm text-zinc-400">
                       {member.silent ? "Silent" : `${member.trackName}${member.artistName ? ` — ${member.artistName}` : ""}`}
@@ -90,18 +105,7 @@ export function PartyPage() {
             <button type="button" onClick={() => void leave()} className="mt-6 text-sm text-zinc-400 hover:text-zinc-100">
               Leave party
             </button>
-            <h2 className="mt-10 text-[11px] tracking-[0.28em] text-zinc-500">FEED</h2>
-            {(query.data?.feed.length ?? 0) === 0 ? (
-              <p className="mt-3 text-sm text-zinc-500">No recent activity.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {query.data?.feed.map((item) => (
-                  <li key={item.id} className="border border-white/10 px-3 py-2 text-sm text-zinc-300">
-                    {item.text}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <Feed items={query.data?.feed ?? []} />
           </>
         ) : query.isSuccess ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -113,6 +117,7 @@ export function PartyPage() {
               }}
             >
               <h2 className="text-sm tracking-[0.18em] text-zinc-400">CREATE A PARTY</h2>
+              <p className="mt-2 text-sm text-zinc-500">A party holds three listeners.</p>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -145,6 +150,33 @@ export function PartyPage() {
         ) : null}
       </main>
     </Frame>
+  );
+}
+
+function Feed({ items }: { items: FeedItem[] }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? items : items.slice(0, 5);
+  const hidden = Math.max(0, items.length - 5);
+  return (
+    <>
+      <h2 className="mt-10 text-[11px] tracking-[0.28em] text-zinc-500">FEED</h2>
+      {items.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">No recent activity.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {shown.map((item) => (
+            <li key={item.id} className="border border-white/10 px-3 py-2 text-sm text-zinc-300">
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {hidden > 0 ? (
+        <button type="button" onClick={() => setOpen((value) => !value)} className="mt-3 text-sm text-zinc-400 hover:text-zinc-100">
+          {open ? "Show less" : `Show ${hidden} more`}
+        </button>
+      ) : null}
+    </>
   );
 }
 

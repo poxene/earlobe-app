@@ -5,6 +5,7 @@ import {
   monsterHp,
   trackTier,
   ledgerOutcome,
+  KILL_SLACK_MS,
   liveFightOutcome,
   progressOnClock,
   type FightResult,
@@ -13,9 +14,11 @@ import {
 import { dropLuck, echoPayout, openingDamage, settleGrade } from "../../src/lib/game/effects";
 import { parseCooldowns } from "../../src/lib/game/skills";
 import { treeEffects } from "../../src/lib/game/trees";
-import { echoReward, RARITY_RANK, rollRelic, type RelicDraft } from "../../src/lib/game/loot";
+import { echoReward, RARITY_RANK, rollRelic, statBonusPayload, type RelicDraft } from "../../src/lib/game/loot";
+import { rollMaterialDrops } from "../../src/lib/game/materials";
 import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying } from "../../src/lib/music/provider";
+import { albumFinished, ritualComplete, type ListenFact } from "../../src/lib/game/quests";
 import {
   ESCAPE_CONSOLATION_XP,
   NEW_ARTIST_XP,
@@ -28,12 +31,12 @@ import { ReconnectRequired } from "../errors";
 import { getSupabase } from "../supabase";
 import { familiesForArtists, loadArtists } from "./catalog";
 import { presentCharacter, loadCharacterSheet } from "./characterSheet";
+import { grantMaterials } from "./materials";
 import { awardXp, heroDps, heroStats, loadHero, saveHero, type Credit, type Hero } from "./hero";
 import { albumTrackIds, listenerActivity } from "./listening";
-import { postFeed } from "./party";
+import { loadBattleAllies, postFeed } from "./party";
 import { ensureQuests, evaluateQuests } from "./questBoard";
 import { listSessionUserIds } from "./lastfmSession";
-import { ritualComplete, type ListenFact } from "../../src/lib/game/quests";
 
 const DAY_MS = 86_400_000;
 const AWAY_MS = 15 * 60 * 1000;
@@ -109,6 +112,7 @@ export async function syncListener(userId: string): Promise<GameSnapshot> {
     questCompletions,
     away,
     sheet: await presentCharacter(userId),
+    allies: await loadBattleAllies(userId),
   };
 }
 
@@ -163,16 +167,17 @@ async function tickLive(
   credit: Credit,
 ): Promise<void> {
   const open = await loadOpen(hero.userId);
+  if (open && playing && playing.trackId === open.trackId) await adoptLength(open, playing);
   if (open && (!playing || playing.trackId !== open.trackId)) {
     const progressMs = clockProgress(open);
     const killMs = timeToKill(open);
-    if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) === "victory") {
+    if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs, durationMs: open.durationMs, echoDepth: open.echoDepth }) === "victory") {
       const remaining = 1 - (open.anchorMs + killMs) / Math.max(open.durationMs, 1);
       await closeFight(hero, { ...open, progressMs }, {
         echoDepth: open.echoDepth,
         hpMax: open.hpMax,
         outcome: "victory",
-        grade: graded(hero, open, remaining),
+        grade: graded(open, remaining),
         killMs,
         remainingFraction: remaining,
       }, credit);
@@ -193,7 +198,9 @@ async function tickLive(
   }
 
   const still = await loadOpen(hero.userId);
-  if (playing && !still) {
+  const sameTrack = Boolean(open && playing && open.trackId === playing.trackId);
+  const won = playing ? await wonThisTrack(hero.userId, playing.trackId) : false;
+  if (playing && !still && !sameTrack && !won) {
     await spawnFight(hero, playing, 0, playing.progressMs, sessionKey(playing));
   }
   if (playing && qualifies(playing.progressMs, playing.durationMs) && !alreadyHeard(heard, playing.trackId, playedAtFrom(playing), playing.durationMs)) {
@@ -220,7 +227,7 @@ async function tickLive(
 async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, credit: Credit): Promise<void> {
   const progressMs = clockProgress(open, playing.progressMs);
   const killMs = timeToKill(open);
-  if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs }) !== "victory") {
+  if (liveFightOutcome({ progressMs, anchorMs: open.anchorMs, killMs, durationMs: open.durationMs, echoDepth: open.echoDepth }) !== "victory") {
     const saved = await getSupabase()
       .from("encounters")
       .update({ progress_ms: progressMs })
@@ -234,7 +241,7 @@ async function pressFight(hero: Hero, open: OpenFight, playing: NowPlaying, cred
     echoDepth: open.echoDepth,
     hpMax: open.hpMax,
     outcome: "victory",
-    grade: graded(hero, open, remaining),
+    grade: graded(open, remaining),
     killMs,
     remainingFraction: remaining,
   }, credit);
@@ -274,7 +281,12 @@ async function spawnFight(
     source_key: sourceKey,
     skill_cooldowns: skillCooldowns,
   });
-  if (inserted.error && inserted.error.code !== "23505") throw new Error(inserted.error.message);
+  if (!inserted.error) return;
+  if (inserted.error.code !== "23505") throw new Error(inserted.error.message);
+  const next = echoDepth + 1;
+  const songLeft = playing.durationMs <= 0 || anchorMs < playing.durationMs - KILL_SLACK_MS;
+  if (next > 7 || !songLeft) return;
+  await spawnFight(hero, playing, next, anchorMs, sourceKey, skillCooldowns);
 }
 
 async function closeFight(hero: Hero, open: OpenFight, fight: FightResult, credit: Credit): Promise<void> {
@@ -304,6 +316,17 @@ async function closeFight(hero: Hero, open: OpenFight, fight: FightResult, credi
     if (draft.relicName) {
       credit.toasts.push({ id: randomUUID(), message: `${draft.relicName} dropped.` });
     }
+    const drops = rollMaterialDrops({
+      monster: monsterForFamily(open.family).monster,
+      tier: trackTier(open.durationMs).name,
+      grade: fight.grade,
+      salt: open.id,
+    });
+    if (drops.length > 0) {
+      await grantMaterials(hero.userId, drops);
+      const line = drops.map((drop) => `${drop.name} ×${drop.quantity}`).join(", ");
+      credit.toasts.push({ id: randomUUID(), message: `${line} dropped.` });
+    }
   }
 }
 
@@ -326,10 +349,11 @@ async function lootFor(
     id,
     user_id: hero.userId,
     name: relic.name,
+    gear_slug: relic.gearSlug,
     monster_type: relic.monsterType,
     genre_family: relic.genreFamily,
     rarity: relic.rarity,
-    stat_bonuses: relic.bonuses,
+    stat_bonuses: statBonusPayload(relic),
     effects: { cut: relic.cut, list: relic.effects },
   });
   if (inserted.error) throw new Error(inserted.error.message);
@@ -363,6 +387,27 @@ function chooseRelic(
   return RARITY_RANK[second.rarity] > RARITY_RANK[first.rarity] ? second : first;
 }
 
+//— a fight opened on the three-minute stand-in takes the catalog length once it arrives.
+async function adoptLength(open: OpenFight, playing: NowPlaying): Promise<void> {
+  const resized = Math.abs(playing.durationMs - open.durationMs) > 15_000;
+  const art = playing.albumImageUrl && playing.albumImageUrl !== open.image ? playing.albumImageUrl : null;
+  if (!resized && !art) return;
+  const hpMax = resized ? monsterHp(playing.durationMs, open.echoDepth) : open.hpMax;
+  const saved = await getSupabase()
+    .from("encounters")
+    .update({
+      ...(resized ? { duration_ms: playing.durationMs, hp_max: hpMax } : {}),
+      ...(art ? { album_image_url: art } : {}),
+    })
+    .eq("id", open.id);
+  if (saved.error) throw new Error(saved.error.message);
+  if (resized) {
+    open.durationMs = playing.durationMs;
+    open.hpMax = hpMax;
+  }
+  if (art) open.image = art;
+}
+
 function clockProgress(open: OpenFight, reportedMs = open.progressMs): number {
   return progressOnClock({
     startedAtMs: new Date(open.startedAt).getTime(),
@@ -378,8 +423,8 @@ function timeToKill(open: OpenFight): number {
   return open.dps > 0 ? (hp / open.dps) * 1000 : Number.POSITIVE_INFINITY;
 }
 
-function graded(hero: Hero, open: OpenFight, remaining: number): Grade {
-  return settleGrade(remaining, heroStats(hero), hero.effects, open.gradeBump);
+function graded(open: OpenFight, remaining: number): Grade {
+  return settleGrade(remaining, open.gradeBump);
 }
 
 async function recordListen(
@@ -441,7 +486,7 @@ async function recordListen(
     legacy: play.legacy,
   });
   if (play.legacy) return;
-  const granted = awardXp(hero, repeatListenXp(prior), "listening", credit, null);
+  const granted = awardXp(hero, repeatListenXp(prior, play.durationMs), "listening", credit, null);
   const marked = await getSupabase()
     .from("listening_events")
     .update({ xp_awarded: granted })
@@ -528,17 +573,17 @@ async function noteAlbum(
     genre_family: play.families[0] ?? "Unmapped",
     tracks_total: total,
     tracks_played: tracks.size,
-    completed_at: total > 0 && tracks.size >= total ? (existing.data?.completed_at ?? new Date().toISOString()) : null,
+    completed_at: albumFinished(tracks.size, total) ? (existing.data?.completed_at ?? new Date().toISOString()) : null,
     xp_awarded: existing.data?.xp_awarded ?? false,
   };
   const saved = await getSupabase().from("codex_albums").upsert(row);
   if (saved.error) throw new Error(saved.error.message);
-  if (!row.xp_awarded && total > 0 && tracks.size >= total) {
+  if (!row.xp_awarded && albumFinished(tracks.size, total)) {
     const ordered = await albumTrackIds(play.albumId);
     const listens: ListenFact[] = heard
       .filter((item) => item.albumId === play.albumId)
       .map((item) => ({ trackId: item.trackId, albumId: item.albumId, artistIds: item.artistIds, playedAt: item.playedAt }));
-    if (ordered.length > 0 && ritualComplete(ordered, listens)) {
+    if (ritualComplete(ordered, listens)) {
       awardXp(hero, ALBUM_COMPLETION_XP, "listening", credit, `${play.albumName} finished. +${ALBUM_COMPLETION_XP} XP`);
       const marked = await getSupabase()
         .from("codex_albums")
@@ -645,6 +690,8 @@ async function activeFight(userId: string, playing: NowPlaying | null): Promise<
     progressMs: playing.progressMs,
     echoDepth: open.echoDepth,
     trackName: open.trackName,
+    artistName: playing.artistNames.filter(Boolean).join(", "),
+    albumName: playing.albumName,
     trackId: open.trackId,
     albumImageUrl: open.image,
     observedAt: Date.now(),
@@ -813,6 +860,21 @@ function fastest(current: number | null, next: number | null): number | null {
   if (next === null) return current;
   if (current === null) return next;
   return Math.min(current, next);
+}
+
+async function wonThisTrack(userId: string, trackId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 90_000).toISOString();
+  const { data, error } = await getSupabase()
+    .from("encounters")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("track_id", trackId)
+    .eq("echo_depth", 0)
+    .eq("outcome", "victory")
+    .gte("resolved_at", since)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.length ?? 0) > 0;
 }
 
 function sessionKey(playing: NowPlaying): string {

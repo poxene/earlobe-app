@@ -9,9 +9,10 @@ import { CodexPage } from "@/pages/Codex";
 import { Debug } from "@/pages/Debug";
 import { Login } from "@/pages/Login";
 import { PartyPage } from "@/pages/Party";
+import { ProfilePage } from "@/pages/Profile";
 import { Preview } from "@/pages/Preview";
 import { QuestsPage } from "@/pages/Quests";
-import { ShopPage } from "@/pages/Shop";
+import { TownPage } from "@/pages/Shop";
 
 export function App() {
   return (
@@ -20,8 +21,10 @@ export function App() {
       <Route path="/battle" element={<Authed><BattlePage /></Authed>} />
       <Route path="/codex" element={<Authed><CodexPage /></Authed>} />
       <Route path="/quests" element={<Authed><QuestsPage /></Authed>} />
-      <Route path="/shop" element={<Authed><ShopPage /></Authed>} />
+      <Route path="/town" element={<Authed><TownPage /></Authed>} />
+      <Route path="/shop" element={<Navigate to="/town" replace />} />
       <Route path="/party" element={<Authed><PartyPage /></Authed>} />
+      <Route path="/c/:name" element={<ProfilePage />} />
       <Route path="/debug" element={<Debug />} />
       {import.meta.env.DEV ? <Route path="/preview" element={<Preview />} /> : null}
       <Route path="*" element={<Navigate to="/" replace />} />

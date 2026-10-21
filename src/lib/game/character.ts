@@ -1,8 +1,11 @@
 import { classById, classForFamily } from "@/lib/game/classes";
+import type { MaterialStackView } from "@/lib/game/materials";
 import { calculateDps } from "@/lib/game/combat";
 import type { Cut, RelicEffect } from "@/lib/game/effects";
 import { fightDps } from "@/lib/game/effects";
 import { masteryTitle } from "@/lib/game/titles";
+import type { BodyType } from "@/lib/portrait/body";
+import { DOLL_SLOTS } from "@/lib/portrait/gear";
 import { legacyGrant } from "@/lib/game/trees";
 import { xpProgress } from "@/lib/game/xp";
 import type { ProviderArtist } from "@/lib/music/provider";
@@ -15,6 +18,20 @@ export type Stats = {
   wis: number;
   cha: number;
 };
+
+export type StatKey = keyof Stats;
+
+export type StatAffix = {
+  stat: StatKey;
+  amount: number;
+};
+
+export function affixLines(relic: { bonuses: Stats; affixes?: readonly StatAffix[] }): StatAffix[] {
+  if (relic.affixes && relic.affixes.length > 0) return [...relic.affixes];
+  return (Object.entries(relic.bonuses) as [StatKey, number][])
+    .filter(([, amount]) => amount > 0)
+    .map(([stat, amount]) => ({ stat, amount }));
+}
 
 export type AlbumCover = {
   id: string;
@@ -37,11 +54,13 @@ export type GenreBar = {
 export type RelicView = {
   id: string;
   name: string;
+  gearSlug: string;
   rarity: "common" | "magic" | "rare" | "legendary" | "mythic";
   monsterType: string;
   family: string;
   color: string;
   bonuses: Stats;
+  affixes: StatAffix[];
   effects: RelicEffect[];
   cut: Cut | null;
 };
@@ -49,6 +68,26 @@ export type RelicView = {
 export type UnlockedClassView = {
   id: string;
   color: string;
+};
+
+export type ListenerRecord = {
+  listens: number;
+  highestEcho: number;
+  faded: number;
+  artists: number;
+  albums: number;
+  albumsFinished: number;
+  relics: number;
+};
+
+export const EMPTY_RECORD: ListenerRecord = {
+  listens: 0,
+  highestEcho: 0,
+  faded: 0,
+  artists: 0,
+  albums: 0,
+  albumsFinished: 0,
+  relics: 0,
 };
 
 export type CharacterSheetModel = {
@@ -68,6 +107,7 @@ export type CharacterSheetModel = {
   albums: AlbumCover[];
   relics: (RelicView | null)[];
   inventory: RelicView[];
+  stacks: MaterialStackView[];
   echoes: number;
   unallocatedPoints: number;
   skills: string[];
@@ -78,8 +118,10 @@ export type CharacterSheetModel = {
   switchReadyAt: string | null;
   victories: number;
   escapes: number;
+  record: ListenerRecord;
   thinHistory: boolean;
   badges: string[];
+  body: BodyType;
 };
 
 export type BuiltCharacter = {
@@ -144,8 +186,9 @@ export function buildCharacter(input: {
       color: classForFamily(row.family).color,
     })),
     albums: input.albums.slice(0, 4),
-    relics: [null, null, null],
+    relics: DOLL_SLOTS.map(() => null),
     inventory: [],
+    stacks: [],
     echoes: 0,
     unallocatedPoints: 0,
     skills: [],
@@ -160,8 +203,10 @@ export function buildCharacter(input: {
     masteryTitle: masteryTitle(active.id, input.level),
     victories: input.victories ?? 0,
     escapes: input.escapes ?? 0,
+    record: EMPTY_RECORD,
     thinHistory: input.artists.length === 0,
     badges: [],
+    body: "body6",
   };
 
   return {

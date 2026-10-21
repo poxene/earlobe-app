@@ -5,16 +5,15 @@ import { isRecord } from "@/lib/isRecord";
 
 //— stats keep their share of damage. each one also does a job the others do not.
 
-export type EffectId = "opening" | "tempo" | "signal" | "poise" | "room" | "encore" | "hoard";
+export type EffectId = "opening" | "tempo" | "signal" | "room" | "encore" | "hoard";
 
 export const EFFECT_NAME: Record<EffectId, string> = {
   opening: "Opening hit",
   tempo: "Fight speed",
-  signal: "Bonus echoes",
-  poise: "Grade leeway",
+  signal: "Bonus gold",
   room: "Listen XP",
   encore: "Echo damage",
-  hoard: "Echo payout",
+  hoard: "Gold payout",
 };
 
 export type RelicEffect = {
@@ -27,7 +26,7 @@ export type RelicEffect = {
 export type Cut = "attuned" | "focused" | "split" | "wild";
 
 export const CUT_LINE: Record<Cut, string> = {
-  attuned: "Stats follow this class.",
+  attuned: "Stats are spread across attributes.",
   focused: "All of the stats go to one attribute.",
   split: "Stats are split across two attributes.",
   wild: "Stats go to this class's lowest attribute.",
@@ -65,10 +64,6 @@ export function dropLuck(stats: Stats, effects: RelicEffect[]): number {
   return Math.min(0.2, stats.cha / 500 + sumMagnitude(effects, "room") / 100);
 }
 
-export function poiseFraction(stats: Stats, effects: RelicEffect[]): number {
-  return stats.wis / 2000 + sumMagnitude(effects, "poise") / 100;
-}
-
 export function echoPayout(base: number, stats: Stats, effects: RelicEffect[], extra: number): number {
   const hoard = 1 + sumMagnitude(effects, "hoard") / 100;
   const signal = sumMagnitude(effects, "signal") + Math.floor(stats.int / 15);
@@ -87,8 +82,8 @@ export function bumpGrade(grade: Grade, steps: number): Grade {
   return next ?? grade;
 }
 
-export function settleGrade(remaining: number, stats: Stats, effects: RelicEffect[], steps: number): Grade {
-  return bumpGrade(gradeForRemaining(remaining + poiseFraction(stats, effects)), steps);
+export function settleGrade(remaining: number, steps: number): Grade {
+  return bumpGrade(gradeForRemaining(remaining), steps);
 }
 
 export function statTooltip(stat: keyof Stats, value: number, effects: RelicEffect[]): { name: string; line: string } {
@@ -113,15 +108,11 @@ export function statTooltip(stat: keyof Stats, value: number, effects: RelicEffe
     const echoes = Math.floor(value / 15) + gear;
     return {
       name: "Intellect",
-      line: `20% of damage. Kills grant ${echoes} extra echoes.`,
+      line: `20% of damage. Kills grant ${echoes} extra gold.`,
     };
   }
   if (stat === "wis") {
-    const gear = sumMagnitude(effects, "poise");
-    return {
-      name: "Wisdom",
-      line: `10% of damage. Grades count an extra ${(value / 20 + gear).toFixed(1)}% of the track as finished.`,
-    };
+    return { name: "Wisdom", line: "10% of damage." };
   }
   const room = sumMagnitude(effects, "room");
   return {
@@ -139,7 +130,11 @@ export function dpsTooltip(stats: Stats, effects: RelicEffect[]): string {
 export function echoTooltip(stats: Stats, effects: RelicEffect[]): string {
   const extra = Math.floor(stats.int / 15) + sumMagnitude(effects, "signal");
   const hoard = sumMagnitude(effects, "hoard");
-  return `Echoes from a kill. Intellect and bonus-echo items add ${extra}.${hoard > 0 ? ` Echo payout items add ${hoard}%.` : ""}`;
+  return `Gold from a kill. Intellect and bonus-gold items add ${extra}.${hoard > 0 ? ` Gold payout items add ${hoard}%.` : ""}`;
+}
+
+export function effectDetail(detail: string): string {
+  return detail.replaceAll("echoes on a kill", "gold on a kill").replaceAll("Echoes from kills", "Gold from kills");
 }
 
 export function parseStoredEffects(value: unknown): { cut: Cut | null; effects: RelicEffect[] } {
@@ -161,7 +156,7 @@ function parseEffect(value: unknown): RelicEffect[] {
 }
 
 function isEffectId(value: string): value is EffectId {
-  return ["opening", "tempo", "signal", "poise", "room", "encore", "hoard"].includes(value);
+  return ["opening", "tempo", "signal", "room", "encore", "hoard"].includes(value);
 }
 
 function isCut(value: unknown): value is Cut {

@@ -36,6 +36,13 @@ export async function fetchLastfmProfile(username: string): Promise<{
   };
 }
 
+export async function fetchPlaycount(userId: string): Promise<number | null> {
+  const body = await callForUser(userId, "user.getInfo");
+  if (!isRecord(body) || !isRecord(body.user)) return null;
+  const count = Number(body.user.playcount);
+  return Number.isFinite(count) && count >= 0 ? Math.round(count) : null;
+}
+
 export async function callForUser(userId: string, method: string, params: Record<string, string> = {}): Promise<unknown> {
   const session = await readSession(userId);
   if (!session) throw new ReconnectRequired();

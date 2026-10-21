@@ -33,7 +33,7 @@ export function Preview() {
     <>
       <Header />
       <p className="mx-auto mb-2 max-w-5xl px-4 text-xs tracking-[0.2em] text-gold/80 md:px-8">
-        FIXTURE — connect Last.fm for your own sheet
+        FIXTURE — connect Last.fm for your own character
       </p>
       <CharacterSheet sheet={sheet} />
     </>

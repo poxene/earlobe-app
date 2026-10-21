@@ -21,7 +21,7 @@ export type Database = {
         Row: {
           id: string;
           lastfm_username: string;
-          display_name: string | null;
+          display_name: string;
           avatar_url: string | null;
           created_at: string;
         };
@@ -76,6 +76,7 @@ export type Database = {
           tree_nodes: string[];
           legacy_points: number;
           legacy_awarded: boolean;
+          body: string;
         };
         Insert: {
           user_id: string;
@@ -127,6 +128,7 @@ export type Database = {
           tree_nodes?: string[];
           legacy_points?: number;
           legacy_awarded?: boolean;
+          body?: string;
         };
         Relationships: [];
       };
@@ -245,6 +247,13 @@ export type Database = {
         payload: Json;
         created_at: string;
       }>;
+      material_stacks: Table<{
+        id: string;
+        user_id: string;
+        slug: string;
+        quantity: number;
+        acquired_at: string;
+      }>;
       relics: Table<{
         id: string;
         user_id: string;
@@ -255,6 +264,8 @@ export type Database = {
         stat_bonuses: Json;
         effects: Json;
         equipped: boolean;
+        equip_slot: number | null;
+        gear_slug: string | null;
         acquired_at: string;
       }>;
       encounters: Table<{
@@ -295,6 +306,12 @@ export type Database = {
         escaped: number;
         best_grade: string | null;
         fastest_kill_sec: number | null;
+      }>;
+      town_messages: Table<{
+        id: string;
+        user_id: string;
+        body: string;
+        created_at: string;
       }>;
       presence: Table<{
         user_id: string;

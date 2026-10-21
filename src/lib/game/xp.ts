@@ -36,12 +36,15 @@ export function qualifies(progressMs: number, durationMs: number): boolean {
   return progressMs / durationMs > QUALIFY_RATIO;
 }
 
-//— priorListens is how many times this track already counted today
-export function repeatListenXp(priorListens: number): number {
-  if (priorListens <= 0) return 10;
-  if (priorListens === 1) return 5;
-  if (priorListens === 2) return 2;
-  return 1;
+const LISTEN_BASE_MS = 3 * 60 * 1000;
+const LISTEN_LENGTH_CAP = 4;
+
+//— a three-minute song pays the base. a longer song pays more, up to four times, and a repeat of it still pays less.
+export function repeatListenXp(priorListens: number, durationMs = LISTEN_BASE_MS): number {
+  const base = priorListens <= 0 ? 10 : priorListens === 1 ? 5 : priorListens === 2 ? 2 : 1;
+  const span = durationMs > 0 ? durationMs : LISTEN_BASE_MS;
+  const scale = Math.min(LISTEN_LENGTH_CAP, Math.max(1, span / LISTEN_BASE_MS));
+  return Math.max(1, Math.round(base * scale));
 }
 
 export function grantXp(xp: number, amount: number): { xp: number; granted: number } {

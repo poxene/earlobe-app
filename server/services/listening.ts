@@ -6,6 +6,8 @@ import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying, ProviderArtist } from "../../src/lib/music/provider";
 import { getSupabase } from "../supabase";
 import { loadArtists } from "./catalog";
+import { cachedCover, coverFor, usableImage } from "./coverArt";
+import { trackDuration } from "./itunes";
 import { callForUser, lastfmCall } from "./lastfmClient";
 
 //— a scrobble means the track was heard. when last.fm has no duration, three minutes still qualifies.
@@ -69,6 +71,8 @@ export async function listenerActivity(
 ): Promise<{ nowPlaying: NowPlaying | null; history: HistoryPlay[] }> {
   const payload = await callForUser(userId, "user.getRecentTracks", { limit: "50" });
   const mapped = mapLastfmRecent(payload);
+  const lead = mapped.nowPlaying ?? mapped.history[0];
+  if (lead?.albumName && !usableImage(lead.imageUrl)) await coverFor(lead.artistName, lead.albumName);
   const history: HistoryPlay[] = [];
   for (const track of mapped.history) {
     if (!track.playedAt) continue;
@@ -80,7 +84,7 @@ export async function listenerActivity(
       artistNames: [track.artistName],
       albumId: track.albumId,
       albumName: track.albumName,
-      albumImageUrl: track.imageUrl,
+      albumImageUrl: albumImage(track),
       playedAt: track.playedAt,
       durationMs: await durationFor(track, listing),
       tracksTotal: listing?.ids.length ?? 0,
@@ -148,7 +152,7 @@ async function toNowPlaying(userId: string, track: LastfmTrack): Promise<NowPlay
     artistIds: [track.artistId],
     albumId: track.albumId,
     albumName: track.albumName,
-    albumImageUrl: track.imageUrl,
+    albumImageUrl: albumImage(track),
     durationMs,
     progressMs: await progressFromEncounter(userId, track.trackId, durationMs),
     isPlaying: true,
@@ -169,7 +173,16 @@ async function durationFor(track: LastfmTrack, listing: AlbumListing | null): Pr
       return duration;
     }
   } catch {
-    //— fall through to the stand-in duration
+    //— last.fm can omit a length. a catalog match is the next clock.
+  }
+  try {
+    const listed = await trackDuration(track.artistName, track.trackName, track.albumName);
+    if (listed && listed > 0) {
+      await writeDuration(track.trackId, listed);
+      return listed;
+    }
+  } catch {
+    return FALLBACK_MS;
   }
   unknownDurations.add(track.trackId);
   return FALLBACK_MS;
@@ -179,17 +192,22 @@ async function durationFor(track: LastfmTrack, listing: AlbumListing | null): Pr
 async function progressFromEncounter(userId: string, trackIdValue: string, durationMs: number): Promise<number> {
   const { data, error } = await getSupabase()
     .from("encounters")
-    .select("started_at")
+    .select("started_at, anchor_ms, resolved_at")
     .eq("user_id", userId)
     .eq("track_id", trackIdValue)
-    .is("resolved_at", null)
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data?.started_at) return 0;
+  if (data.resolved_at) {
+    const age = Date.now() - new Date(data.started_at).getTime();
+    const limit = Math.max(durationMs, FALLBACK_MS) + 2 * 60 * 1000;
+    if (age > limit) return 0;
+  }
+  const anchor = data.anchor_ms > 0 ? data.anchor_ms : 0;
   const elapsed = Date.now() - new Date(data.started_at).getTime();
-  const progress = Math.max(0, elapsed);
+  const progress = Math.max(0, anchor + elapsed);
   return durationMs > 0 ? Math.min(durationMs, progress) : progress;
 }
 
@@ -217,6 +235,10 @@ async function rememberAlbum(artistName: string, albumName: string): Promise<Alb
     missingAlbums.add(id);
     return null;
   }
+}
+
+function albumImage(track: LastfmTrack): string | null {
+  return usableImage(track.imageUrl) ?? (track.albumName ? cachedCover(track.artistName, track.albumName) : null);
 }
 
 function parseAlbum(payload: unknown, artistName: string): AlbumListing | null {

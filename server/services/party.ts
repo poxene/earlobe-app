@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { classById } from "../../src/lib/game/classes";
+import { classSignature } from "../../src/lib/game/skills";
+import type { PartyAlly } from "../../src/lib/game/snapshot";
+import { DOLL_SLOTS } from "../../src/lib/portrait/gear";
 import { GameError } from "../errors";
 import { getSupabase } from "../supabase";
+
+export const PARTY_LIMIT = 3;
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -118,7 +124,7 @@ export async function joinParty(userId: string, code: string): Promise<void> {
     .select("user_id", { count: "exact", head: true })
     .eq("party_id", party.data.id);
   if (members.error) throw new Error(members.error.message);
-  if ((members.count ?? 0) >= 6) throw new GameError(409, "party_full");
+  if ((members.count ?? 0) >= PARTY_LIMIT) throw new GameError(409, "party_full");
   const joined = await supabase.from("party_members").insert({ party_id: party.data.id, user_id: userId });
   if (joined.error) throw new Error(joined.error.message);
 }
@@ -135,6 +141,49 @@ export async function leaveParty(userId: string): Promise<void> {
     const dropped = await supabase.from("parties").delete().eq("id", partyId);
     if (dropped.error) throw new Error(dropped.error.message);
   }
+}
+
+export async function loadBattleAllies(userId: string): Promise<PartyAlly[]> {
+  const partyId = await partyIdFor(userId);
+  if (!partyId) return [];
+  const supabase = getSupabase();
+  const members = await supabase
+    .from("party_members")
+    .select("user_id, joined_at")
+    .eq("party_id", partyId)
+    .order("joined_at", { ascending: true });
+  if (members.error) throw new Error(members.error.message);
+  const ids = (members.data ?? []).map((row) => row.user_id).filter((id) => id !== userId).slice(0, PARTY_LIMIT - 1);
+  if (ids.length === 0) return [];
+  const [profiles, characters, relics] = await Promise.all([
+    supabase.from("profiles").select("id, display_name").in("id", ids),
+    supabase.from("characters").select("user_id, active_class, level, body").in("user_id", ids),
+    supabase.from("relics").select("user_id, gear_slug, equip_slot, equipped").in("user_id", ids).eq("equipped", true),
+  ]);
+  if (profiles.error) throw new Error(profiles.error.message);
+  if (characters.error) throw new Error(characters.error.message);
+  if (relics.error) throw new Error(relics.error.message);
+  return ids.map((id) => {
+    const profile = profiles.data?.find((row) => row.id === id);
+    const character = characters.data?.find((row) => row.user_id === id);
+    const className = character?.active_class ?? "Wanderer";
+    const gear: (string | null)[] = DOLL_SLOTS.map(() => null);
+    for (const relic of relics.data ?? []) {
+      if (relic.user_id !== id || relic.equip_slot == null) continue;
+      if (relic.equip_slot < 0 || relic.equip_slot >= gear.length) continue;
+      gear[relic.equip_slot] = relic.gear_slug;
+    }
+    return {
+      userId: id,
+      name: profile?.display_name ?? "Listener",
+      className,
+      classColor: classById(className)?.color ?? "#64748b",
+      level: character?.level ?? 1,
+      body: character?.body ?? "body6",
+      gear,
+      skillId: classSignature(className).id,
+    };
+  });
 }
 
 export async function loadFeed(userId: string): Promise<{ id: string; type: string; text: string; at: string }[]> {

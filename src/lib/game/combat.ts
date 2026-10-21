@@ -22,17 +22,32 @@ export function calculateDps(stats: Stats): number {
   return 8 + power * 0.15;
 }
 
-export function trackTier(durationMs: number): { name: TrackTier; scalar: number } {
+export function trackTier(durationMs: number): { name: TrackTier } {
   const seconds = durationMs / 1000;
-  if (seconds >= 600) return { name: "boss", scalar: 1.3 };
-  if (seconds >= 360) return { name: "elite", scalar: 1.15 };
-  return { name: "standard", scalar: 1 };
+  if (seconds >= 600) return { name: "boss" };
+  if (seconds >= 360) return { name: "elite" };
+  return { name: "standard" };
 }
+
+const FRESH_STATS: Stats = { str: 10, agi: 10, int: 10, wis: 10, cha: 10 };
+
+//— every track's health matches a fresh hero with no gear. length changes the loot, not whether the song can be finished. gear and levels only kill sooner.
+function freshDamagePerSecond(): number {
+  const base = calculateDps(FRESH_STATS);
+  const tempo = 1 + FRESH_STATS.agi / 400;
+  const opening = FRESH_STATS.str / 2000;
+  return (base * tempo) / (1 - opening);
+}
+
+const HP_PER_SECOND = freshDamagePerSecond();
+
+//— a finished song still counts when the last blow was only a few seconds short. a skip is not a finish.
+export const KILL_SLACK_MS = 15_000;
 
 export function monsterHp(durationMs: number, echoDepth: number): number {
   const seconds = Math.max(1, durationMs / 1000);
-  const density = 10 + echoDepth * 2;
-  return Math.round(seconds * density * trackTier(durationMs).scalar);
+  const density = HP_PER_SECOND + echoDepth * 2;
+  return Math.round(seconds * density);
 }
 
 export function addStats(base: Stats, extra: Partial<Stats>): Stats {
@@ -129,10 +144,22 @@ export function progressOnClock(input: {
   return Math.max(0, input.storedProgressMs, capped);
 }
 
-//— a monster at 0 hp is a kill, including one that died before the halfway mark. leaving early without the kill is the escape.
-export function liveFightOutcome(input: { progressMs: number; anchorMs: number; killMs: number }): Outcome {
+//— a monster at 0 hp is a kill, including one that died before the halfway mark.
+// hearing a track out kills it, even if an older fight stored extra health. an echo still has to fall on its own.
+export function liveFightOutcome(input: {
+  progressMs: number;
+  anchorMs: number;
+  killMs: number;
+  durationMs: number;
+  echoDepth?: number;
+}): Outcome {
   const fought = Math.max(0, input.progressMs - input.anchorMs);
-  if (Number.isFinite(input.killMs) && fought >= input.killMs) return "victory";
+  if (!Number.isFinite(input.killMs)) return "escaped";
+  if (fought >= input.killMs) return "victory";
+  const heardOut = input.durationMs > 0 && input.progressMs >= input.durationMs;
+  if (!heardOut) return "escaped";
+  if ((input.echoDepth ?? 0) === 0) return "victory";
+  if (input.killMs - fought <= KILL_SLACK_MS) return "victory";
   return "escaped";
 }
 

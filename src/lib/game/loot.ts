@@ -1,8 +1,8 @@
-import type { Stats } from "@/lib/game/character";
+import type { StatAffix, StatKey, Stats } from "@/lib/game/character";
 import type { Grade, TrackTier } from "@/lib/game/combat";
 import { monsterForFamily } from "@/lib/game/bestiary";
-import { classForFamily, type StatVector } from "@/lib/game/classes";
 import type { Cut, EffectId, RelicEffect } from "@/lib/game/effects";
+import { gearForSalt, relicTitle } from "@/lib/portrait/gear";
 
 export const RARITIES = ["common", "magic", "rare", "legendary", "mythic"] as const;
 export type Rarity = (typeof RARITIES)[number];
@@ -32,20 +32,12 @@ export const SELL_PRICE: Record<Rarity, number> = {
   mythic: 648,
 };
 
-const PART: Record<Rarity, string> = {
-  common: "Shard",
-  magic: "Horn",
-  rare: "Crown",
-  legendary: "Idol",
-  mythic: "Myth",
-};
-
-const BUDGET: Record<Rarity, number> = {
-  common: 3,
-  magic: 5,
-  rare: 7,
-  legendary: 10,
-  mythic: 14,
+const AFFIX_ROLL: Record<Rarity, { min: number; max: number; high: number }> = {
+  common: { min: 1, max: 1, high: 3 },
+  magic: { min: 1, max: 2, high: 4 },
+  rare: { min: 2, max: 3, high: 5 },
+  legendary: { min: 3, max: 5, high: 6 },
+  mythic: { min: 6, max: 7, high: 8 },
 };
 
 //— legendary starts at 0.35% and is fed by the tier beneath it. it never reaches 1%.
@@ -134,97 +126,111 @@ export function craftRelic(input: { genreFamily: string; rarity: Rarity; salt: s
 
 export type RelicDraft = {
   name: string;
+  gearSlug: string;
   monsterType: string;
   genreFamily: string;
   rarity: Rarity;
   bonuses: Stats;
+  affixes: StatAffix[];
   cut: Cut;
   effects: RelicEffect[];
 };
 
+export function statBonusPayload(draft: Pick<RelicDraft, "bonuses" | "affixes">): Stats & { rolls: StatAffix[] } {
+  return { ...draft.bonuses, rolls: draft.affixes };
+}
+
 function draftRelic(genreFamily: string, rarity: Rarity, salt: string): RelicDraft {
   const monster = monsterForFamily(genreFamily);
-  const vector = classForFamily(genreFamily).vector;
-  const cut = cutFor(hash(salt));
+  const piece = gearForSalt(`${salt}:gear`);
+  const rolled = rollAffixes(rarity, salt);
   return {
-    name: `${monster.monster} ${PART[rarity]}`,
+    name: relicTitle(monster.monster, piece),
+    gearSlug: piece.slug,
     monsterType: monster.monster,
     genreFamily,
     rarity,
-    bonuses: cutBonus(BUDGET[rarity], vector, cut),
-    cut,
-    effects: effectsFor(rarity, hash(`${salt}:fx`)),
+    bonuses: rolled.bonuses,
+    affixes: rolled.affixes,
+    cut: rolled.cut,
+    effects: effectsFor(rarity, `${salt}:fx`),
   };
 }
 
 const KEYS = ["str", "agi", "int", "wis", "cha"] as const;
-const CUTS: Cut[] = ["attuned", "focused", "split", "wild"];
-const EFFECT_IDS: EffectId[] = ["opening", "tempo", "signal", "poise", "room", "encore", "hoard"];
+const EFFECT_IDS: EffectId[] = ["opening", "tempo", "signal", "room", "encore", "hoard"];
 
 const EFFECT_COPY: Record<EffectId, { name: string; detail: (magnitude: number) => string }> = {
   opening: { name: "Opening hit", detail: (magnitude) => `Opening hit deals an extra ${magnitude}% of max health.` },
   tempo: { name: "Fight speed", detail: (magnitude) => `+${magnitude}% damage for the whole fight.` },
-  signal: { name: "Bonus echoes", detail: (magnitude) => `+${magnitude} echoes on a kill.` },
-  poise: { name: "Grade leeway", detail: (magnitude) => `Grades count an extra ${magnitude}% of the track as finished.` },
+  signal: { name: "Bonus gold", detail: (magnitude) => `+${magnitude} gold on a kill.` },
   room: { name: "Listen XP", detail: (magnitude) => `+${magnitude}% listen XP, and +${magnitude}% drop chance.` },
   encore: { name: "Echo damage", detail: (magnitude) => `+${magnitude}% damage against echoes.` },
-  hoard: { name: "Echo payout", detail: (magnitude) => `Echoes from kills are ${magnitude}% higher.` },
+  hoard: { name: "Gold payout", detail: (magnitude) => `Gold from kills is ${magnitude}% higher.` },
 };
 
 const MAGNITUDE: Record<EffectId, Record<Rarity, number>> = {
   opening: { common: 2, magic: 4, rare: 6, legendary: 10, mythic: 14 },
   tempo: { common: 3, magic: 6, rare: 8, legendary: 12, mythic: 16 },
   signal: { common: 1, magic: 1, rare: 2, legendary: 4, mythic: 6 },
-  poise: { common: 1, magic: 1, rare: 2, legendary: 3, mythic: 5 },
   room: { common: 3, magic: 6, rare: 8, legendary: 12, mythic: 16 },
   encore: { common: 8, magic: 14, rare: 18, legendary: 28, mythic: 40 },
   hoard: { common: 10, magic: 18, rare: 25, legendary: 40, mythic: 60 },
 };
 
-function cutFor(seed: number): Cut {
-  return CUTS[seed % CUTS.length] ?? "attuned";
-}
-
-function cutBonus(budget: number, vector: StatVector, cut: Cut): Stats {
-  const ranked = [...KEYS].sort((a, b) => vector[b] - vector[a] || KEYS.indexOf(a) - KEYS.indexOf(b));
-  if (cut === "focused") return spend(budget, ranked.slice(0, 1));
-  if (cut === "split") return spend(budget, ranked.slice(0, 2));
-  if (cut === "wild") {
-    const ignored = [...KEYS].sort((a, b) => vector[a] - vector[b] || KEYS.indexOf(b) - KEYS.indexOf(a));
-    return spend(budget, ignored.slice(0, 1));
+function rollAffixes(rarity: Rarity, salt: string): { bonuses: Stats; affixes: StatAffix[]; cut: Cut } {
+  const band = AFFIX_ROLL[rarity];
+  const count = band.min + (band.max <= band.min ? 0 : hash(`${salt}:count`) % (band.max - band.min + 1));
+  const affixes: StatAffix[] = [];
+  for (let index = 0; index < count; index += 1) {
+    affixes.push({
+      stat: pickStat(hash(`${salt}:affix:${index}`)),
+      amount: 1 + (hash(`${salt}:amount:${index}`) % band.high),
+    });
   }
-  return spend(budget, ranked);
+  const unique = new Set(affixes.map((row) => row.stat)).size;
+  return {
+    affixes,
+    bonuses: sumAffixes(affixes),
+    cut: unique >= 3 ? "attuned" : unique === 2 ? "split" : "focused",
+  };
 }
 
-function spend(budget: number, keys: (typeof KEYS)[number][]): Stats {
+function pickStat(seed: number): StatKey {
+  return KEYS[seed % KEYS.length] ?? "str";
+}
+
+function sumAffixes(affixes: readonly StatAffix[]): Stats {
   const bonuses: Stats = { str: 0, agi: 0, int: 0, wis: 0, cha: 0 };
-  if (keys.length === 0) return bonuses;
-  let left = budget;
-  let cursor = 0;
-  while (left > 0) {
-    const key = keys[cursor % keys.length];
-    if (!key) break;
-    const chunk = Math.min(left, keys.length === 1 ? left : cursor < 2 ? 2 : 1);
-    bonuses[key] += chunk;
-    left -= chunk;
-    cursor += 1;
-  }
+  for (const row of affixes) bonuses[row.stat] += row.amount;
   return bonuses;
 }
 
-function effectsFor(rarity: Rarity, seed: number): RelicEffect[] {
+function effectsFor(rarity: Rarity, salt: string): RelicEffect[] {
   const count = rarity === "mythic" ? 3 : rarity === "rare" || rarity === "legendary" ? 2 : 1;
-  const effects: RelicEffect[] = [];
-  let cursor = seed;
-  while (effects.length < count) {
-    const id = EFFECT_IDS[cursor % EFFECT_IDS.length];
-    cursor += 1;
-    if (!id || effects.some((effect) => effect.id === id)) continue;
-    const magnitude = MAGNITUDE[id][rarity];
-    const copy = EFFECT_COPY[id];
-    effects.push({ id, name: copy.name, detail: copy.detail(magnitude), magnitude });
+  return shuffle(EFFECT_IDS, hash(salt))
+    .slice(0, count)
+    .flatMap((id) => {
+      const high = MAGNITUDE[id][rarity];
+      const copy = EFFECT_COPY[id];
+      const magnitude = 1 + (hash(`${salt}:${id}`) % high);
+      return [{ id, name: copy.name, detail: copy.detail(magnitude), magnitude }];
+    });
+}
+
+function shuffle<T>(items: readonly T[], seed: number): T[] {
+  const copy = [...items];
+  let state = seed >>> 0;
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    const swap = state % (index + 1);
+    const left = copy[index];
+    const right = copy[swap];
+    if (left === undefined || right === undefined) continue;
+    copy[index] = right;
+    copy[swap] = left;
   }
-  return effects;
+  return copy;
 }
 
 function hash(seed: string): number {

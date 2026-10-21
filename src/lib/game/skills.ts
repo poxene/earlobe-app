@@ -103,6 +103,12 @@ export function skillsForClass(classId: string): SkillDef[] {
   return BY_CLASS.Wanderer;
 }
 
+export function classSignature(classId: string): SkillDef {
+  const first = skillsForClass(classId)[0];
+  if (!first) throw new Error("class has no skill");
+  return first;
+}
+
 export function offersFor(classId: string, known: readonly string[]): SkillDef[] {
   const learned = new Set(known);
   return skillsForClass(classId).filter((entry) => !learned.has(entry.id));
@@ -164,7 +170,7 @@ function skillDetail(tune: {
   } else if (tune.seconds > 0) {
     parts.push(`Deal ${tune.seconds} seconds of your damage`);
   }
-  if (tune.echoes > 0) parts.push(`${tune.echoes} extra echoes on a kill`);
+  if (tune.echoes > 0) parts.push(`${tune.echoes} extra gold on a kill`);
   if (tune.gradeSteps > 0) parts.push(`raise the grade by ${tune.gradeSteps}`);
   if (tune.dropAdvantage) parts.push("roll the drop twice");
   if (tune.xpBonus > 0) parts.push(`${tune.xpBonus} bonus XP`);

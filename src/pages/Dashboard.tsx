@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { CharacterSheet } from "@/components/CharacterSheet";
 import { Frame } from "@/components/Frame";
 import { AwayModal, LevelUpModal, QuestModal, ToastStack, UnlockModal } from "@/components/GameOverlays";
-import { NowPlayingBar } from "@/components/NowPlayingBar";
 import { useGameSync } from "@/hooks/useGameSync";
 import { apiSend, ApiError } from "@/lib/api";
-import type { CharacterSheetModel, Stats } from "@/lib/game/character";
-import { addStats, calculateDps } from "@/lib/game/combat";
+import type { CharacterSheetModel, RelicView, Stats } from "@/lib/game/character";
+import { addStats, calculateDps, sumStats } from "@/lib/game/combat";
 import { fightDps } from "@/lib/game/effects";
+import { itemFits, pieceOf, slotIndex } from "@/lib/portrait/gear";
 import type { AwaySummary, GameSnapshot, GameToast } from "@/lib/game/snapshot";
 import { nodeById, treeEffects } from "@/lib/game/trees";
 import { Header } from "@/components/Header";
@@ -17,6 +17,8 @@ import { Header } from "@/components/Header";
 export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
   const sync = useGameSync();
   const queryClient = useQueryClient();
+  const gearEpoch = useRef(0);
+  const gearQueue = useRef(Promise.resolve());
   const [toasts, setToasts] = useState<GameToast[]>([]);
   const [levelUp, setLevelUp] = useState<{ level: number; unallocated: number } | null>(null);
   const [unlocks, setUnlocks] = useState<{ classId: string; color: string }[]>([]);
@@ -42,6 +44,43 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
     await Promise.all([sync.refetch(), queryClient.invalidateQueries({ queryKey: ["character"] })]);
   }
 
+  function moveGear(path: string, body: unknown, patch: (sheet: CharacterSheetModel) => CharacterSheetModel) {
+    const mine = ++gearEpoch.current;
+    const snapshot = queryClient.getQueryData<GameSnapshot>(["sync"]);
+    const character = queryClient.getQueryData<CharacterSheetModel>(["character"]);
+    if (snapshot) {
+      queryClient.setQueryData<GameSnapshot>(["sync"], {
+        ...snapshot,
+        levelUp: null,
+        unlocks: [],
+        questCompletions: [],
+        away: null,
+        sheet: patch(snapshot.sheet),
+      });
+    }
+    if (character) queryClient.setQueryData<CharacterSheetModel>(["character"], patch(character));
+    const job = gearQueue.current.then(async () => {
+      try {
+        await apiSend(path, "POST", body);
+      } catch (error) {
+        if (gearEpoch.current === mine) {
+          if (snapshot) queryClient.setQueryData(["sync"], snapshot);
+          if (character) queryClient.setQueryData(["character"], character);
+        }
+        throw error;
+      }
+    });
+    const settle = () => {
+      if (gearEpoch.current !== mine) return;
+      return Promise.all([sync.refetch(), queryClient.invalidateQueries({ queryKey: ["character"] })]);
+    };
+    gearQueue.current = job.then(settle, settle).then(
+      () => undefined,
+      () => undefined,
+    );
+    return job;
+  }
+
   async function commit(path: string, body: unknown, patch: (sheet: CharacterSheetModel) => CharacterSheetModel) {
     const snapshot = queryClient.getQueryData<GameSnapshot>(["sync"]);
     const character = queryClient.getQueryData<CharacterSheetModel>(["character"]);
@@ -61,7 +100,6 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
 
   return (
     <Frame>
-      <NowPlayingBar />
       {sync.data?.fight ? (
         <p className="mx-auto mb-4 w-full max-w-5xl px-4 text-sm md:px-8">
           <Link to="/battle" className="text-gold hover:text-gold-2">
@@ -72,11 +110,15 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
       <CharacterSheet
         sheet={sync.data?.sheet ?? shown}
         onApplyStats={(grants) => commit("/api/character/allocate", { stats: grants }, (current) => withStatGrants(current, grants))}
-        onEquip={(id) => void refresh(`/api/relics/${id}/equip`)}
-        onUnequip={(id) => void refresh(`/api/relics/${id}/unequip`)}
+        onEquip={(id, slot) => moveGear(`/api/relics/${id}/equip`, { slot }, (current) => withEquipped(current, id, slot))}
+        onUnequip={(id) => moveGear(`/api/relics/${id}/unequip`, undefined, (current) => withUnequipped(current, id))}
+        onSplit={(id, quantity) => refresh("/api/materials/split", { stackId: id, quantity })}
+        onCombine={(id) => refresh("/api/materials/combine", { stackId: id })}
         onSwitchClass={(id) => void refresh("/api/character/class", { classId: id })}
         onApplySkills={(ids) => commit("/api/character/skill", { skillIds: ids }, (current) => withSkills(current, ids))}
         onReset={() => void refresh("/api/character/reset")}
+        onBody={(body) => refresh("/api/character/body", { body })}
+        onRename={(name) => commit("/api/character/name", { name }, (current) => ({ ...current, displayName: name }))}
       />
       <ToastStack toasts={toasts} onDone={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
       {levelUp ? (
@@ -129,6 +171,61 @@ export function SheetError({
       </main>
     </>
   );
+}
+
+function withEquipped(sheet: CharacterSheetModel, id: string, slot: number): CharacterSheetModel {
+  const worn = sheet.relics.slice();
+  const from = worn.findIndex((relic) => relic?.id === id);
+  const carrying = from >= 0 ? worn[from] : sheet.inventory.find((relic) => relic.id === id);
+  if (!carrying) return sheet;
+  const piece = pieceOf(carrying);
+  if (!itemFits(piece, slot) || from === slot) return sheet;
+  const weapon = slotIndex("weapon");
+  const offhand = slotIndex("offhand");
+  if (slot === offhand) {
+    const main = worn[weapon];
+    if (main && main.id !== id && pieceOf(main).twoHanded) return sheet;
+  }
+  const inventory = sheet.inventory.filter((relic) => relic.id !== id);
+  const displaced: RelicView[] = [];
+  if (piece.twoHanded && slot === weapon) {
+    const blocked = worn[offhand];
+    if (blocked && blocked.id !== id) {
+      displaced.push(blocked);
+      worn[offhand] = null;
+    }
+  }
+  const occupant = worn[slot];
+  if (from >= 0) worn[from] = null;
+  if (occupant && occupant.id !== id) {
+    if (from >= 0 && itemFits(pieceOf(occupant), from)) worn[from] = occupant;
+    else displaced.push(occupant);
+  }
+  worn[slot] = carrying;
+  return rescore(sheet, worn, [...inventory, ...displaced]);
+}
+
+function withUnequipped(sheet: CharacterSheetModel, id: string): CharacterSheetModel {
+  const index = sheet.relics.findIndex((relic) => relic?.id === id);
+  const relic = index >= 0 ? sheet.relics[index] : null;
+  if (!relic) return sheet;
+  const worn = sheet.relics.slice();
+  worn[index] = null;
+  return rescore(sheet, worn, [...sheet.inventory, relic]);
+}
+
+function rescore(sheet: CharacterSheetModel, relics: (RelicView | null)[], inventory: RelicView[]): CharacterSheetModel {
+  const before = sumStats(sheet.relics.flatMap((relic) => (relic ? [relic.bonuses] : [])));
+  const after = sumStats(relics.flatMap((relic) => (relic ? [relic.bonuses] : [])));
+  const stats = addStats(sheet.stats, {
+    str: after.str - before.str,
+    agi: after.agi - before.agi,
+    int: after.int - before.int,
+    wis: after.wis - before.wis,
+    cha: after.cha - before.cha,
+  });
+  const worn = relics.flatMap((relic) => relic?.effects ?? []);
+  return { ...sheet, relics, inventory, stats, dps: fightDps(calculateDps(stats), stats, worn, 0) };
 }
 
 function withStatGrants(sheet: CharacterSheetModel, grants: Stats): CharacterSheetModel {
