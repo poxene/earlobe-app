@@ -9,7 +9,15 @@ test("a track counts only after half its runtime", () => {
 });
 
 test("repeat listens pay less, then floor at 1", () => {
-  assert.deepEqual([0, 1, 2, 3, 9].map(repeatListenXp), [10, 5, 2, 1, 1]);
+  assert.deepEqual([0, 1, 2, 3, 9].map((prior) => repeatListenXp(prior)), [10, 5, 2, 1, 1]);
+});
+
+test("a longer song pays more listening xp, and a short one keeps the base", () => {
+  assert.equal(repeatListenXp(0, 6 * 60 * 1000), 20);
+  assert.equal(repeatListenXp(1, 6 * 60 * 1000), 10);
+  assert.equal(repeatListenXp(0, 12 * 60 * 1000), 40);
+  assert.equal(repeatListenXp(0, 20 * 60 * 1000), 40);
+  assert.equal(repeatListenXp(0, 30_000), 10);
 });
 
 test("a reset gives level points back and keeps legacy skill points", () => {

@@ -457,7 +457,7 @@ async function recordListen(
     legacy: play.legacy,
   });
   if (play.legacy) return;
-  const granted = awardXp(hero, repeatListenXp(prior), "listening", credit, null);
+  const granted = awardXp(hero, repeatListenXp(prior, play.durationMs), "listening", credit, null);
   const marked = await getSupabase()
     .from("listening_events")
     .update({ xp_awarded: granted })
