@@ -8,6 +8,7 @@ import { cronRouter } from "./routes/cron";
 import { authRouter } from "./routes/auth";
 import { gameRouter } from "./routes/game";
 import { lastfmRouter } from "./routes/lastfm";
+import { publicRouter } from "./routes/public";
 
 const app = express();
 app.disable("x-powered-by");
@@ -33,6 +34,7 @@ app.use("/auth", authRouter);
 
 app.use("/api/cron", cronRouter);
 app.use("/api/lastfm", requireAuth, lastfmRouter);
+app.use("/api", publicRouter);
 app.use("/api", requireAuth, gameRouter);
 app.use("/api", requireAuth, apiRouter);
 

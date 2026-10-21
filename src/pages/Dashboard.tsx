@@ -120,6 +120,7 @@ export function Dashboard({ sheet }: { sheet: CharacterSheetModel }) {
         onApplySkills={(ids) => commit("/api/character/skill", { skillIds: ids }, (current) => withSkills(current, ids))}
         onReset={() => void refresh("/api/character/reset")}
         onBody={(body) => refresh("/api/character/body", { body })}
+        onRename={(name) => commit("/api/character/name", { name }, (current) => ({ ...current, displayName: name }))}
       />
       <ToastStack toasts={toasts} onDone={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
       {levelUp ? (

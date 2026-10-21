@@ -21,19 +21,19 @@ export type Database = {
         Row: {
           id: string;
           lastfm_username: string;
-          display_name: string | null;
+          display_name: string;
           avatar_url: string | null;
           created_at: string;
         };
         Insert: {
           id: string;
           lastfm_username: string;
-          display_name?: string | null;
+          display_name: string;
           avatar_url?: string | null;
           created_at?: string;
         };
         Update: {
-          display_name?: string | null;
+          display_name?: string;
           avatar_url?: string | null;
         };
         Relationships: [];

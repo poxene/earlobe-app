@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { ApiError } from "@/lib/api";
+import { handleProblem, parseHandle, profilePath } from "@/lib/profile/handle";
 import { GoldAmount, GoldMark } from "@/components/Gold";
 import { PaperDoll } from "@/components/PaperDoll";
 import { BodyChip, ListenerPortrait } from "@/components/portrait/ListenerPortrait";
@@ -42,6 +44,7 @@ export function CharacterSheet({
   onApplySkills,
   onReset,
   onBody,
+  onRename,
 }: {
   sheet: CharacterSheetModel;
   onApplyStats?: (grants: Stats) => Promise<void> | void;
@@ -53,6 +56,7 @@ export function CharacterSheet({
   onApplySkills?: (skillIds: string[]) => Promise<void> | void;
   onReset?: () => void;
   onBody?: (body: BodyType) => Promise<void> | void;
+  onRename?: (name: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Stats>(EMPTY_STATS);
   const [pending, setPending] = useState<string[]>([]);
@@ -155,6 +159,12 @@ export function CharacterSheet({
             <h1 className="mt-1 break-words font-display text-5xl leading-none tracking-wide md:text-7xl">
               {sheet.displayName}
             </h1>
+            <p className="mt-2 text-sm text-zinc-500">
+              <Link to={profilePath(sheet.displayName)} className="hover:text-zinc-200">
+                earlo.be/c/{sheet.displayName}
+              </Link>
+            </p>
+            {onRename ? <NameField name={sheet.displayName} onRename={onRename} /> : null}
             <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="inline-flex items-center gap-2" style={{ color: sheet.classColor }}>
                 <i className="h-2 w-2 rounded-full" style={{ background: sheet.classColor }} />
@@ -314,6 +324,86 @@ export function CharacterSheet({
         </Link>
       </p>
     </main>
+  );
+}
+
+function NameField({ name, onRename }: { name: string; onRename: (name: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setDraft(name), [name]);
+
+  async function save() {
+    const next = parseHandle(draft);
+    if (!next) {
+      setProblem(handleProblem(draft) === "reserved" ? "That name is reserved." : "Use 2–20 letters, numbers, hyphens, or underscores.");
+      return;
+    }
+    if (next === name) {
+      setEditing(false);
+      setProblem("");
+      return;
+    }
+    setBusy(true);
+    setProblem("");
+    try {
+      await onRename(next);
+      setEditing(false);
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : "";
+      setProblem(
+        code === "name_taken" ? "That name is already taken." : code === "name_reserved" ? "That name is reserved." : "Couldn't save that name.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" onClick={() => setEditing(true)} className="mt-2 text-sm text-zinc-400 hover:text-zinc-100">
+        Change name
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="mt-3 flex max-w-sm flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <input
+        value={draft}
+        onChange={(event) => {
+          setProblem("");
+          setDraft(event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 20));
+        }}
+        className="min-w-0 flex-1 border border-white/15 bg-ink px-3 py-2 text-sm text-zinc-100"
+        aria-label="Display name"
+        autoFocus
+        spellCheck={false}
+      />
+      <button type="submit" disabled={busy} className="bg-gold px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40">
+        Save
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(name);
+          setProblem("");
+          setEditing(false);
+        }}
+        className="text-sm text-zinc-400 hover:text-zinc-100"
+      >
+        Cancel
+      </button>
+      {problem ? <p className="basis-full text-sm text-gold">{problem}</p> : null}
+    </form>
   );
 }
 

@@ -6,6 +6,7 @@ import { sellRelic, upgradeRelics } from "../services/shop";
 import { loadCodex } from "../services/codexRead";
 import { syncListener } from "../services/gameSync";
 import { createParty, joinParty, leaveParty, loadFeed, loadParty } from "../services/party";
+import { setDisplayName } from "../services/profiles";
 import { beginQuest } from "../services/playback";
 import { listQuests, rerollQuest } from "../services/questBoard";
 import { isRecord } from "../../src/lib/isRecord";
@@ -90,6 +91,10 @@ gameRouter.post("/character/body", (req, res, next) => {
     await setBody(userId, text(req.body, "body"));
     return { ok: true };
   });
+});
+
+gameRouter.post("/character/name", (req, res, next) => {
+  void act(req, res, next, async (userId) => ({ displayName: await setDisplayName(userId, text(req.body, "name")) }));
 });
 
 gameRouter.post("/character/class", (req, res, next) => {
