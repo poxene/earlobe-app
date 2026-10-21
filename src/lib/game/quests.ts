@@ -1,3 +1,5 @@
+import { parseEntityId } from "@/lib/music/lastfmIds";
+
 export type DiscoveryObjective = {
   type: "discovery";
   families: string[];
@@ -24,6 +26,8 @@ export type SocialObjective = {
   type: "social";
   trackId: string;
   trackName: string;
+  artistName: string;
+  albumName: string;
   friendName: string;
   friendId: string;
 };
@@ -68,22 +72,61 @@ export function questProgress(
     const heard = listens.some((row) => row.trackId === objective.trackId);
     return pack(heard ? 1 : 0, 1);
   }
-  return pack(ritualComplete(objective.trackIds, listens) ? 1 : 0, 1);
+  const reached = ritualReached(objective.trackIds, listens);
+  return pack(reached, objective.trackIds.length || 1);
 }
 
 export function ritualComplete(trackIds: string[], listens: ListenFact[]): boolean {
-  if (trackIds.length === 0) return false;
+  return trackIds.length > 0 && ritualReached(trackIds, listens) === trackIds.length;
+}
+
+export function ritualReached(trackIds: string[], listens: ListenFact[]): number {
+  if (trackIds.length === 0) return 0;
   const ordered = [...listens].sort((a, b) => a.playedAt.localeCompare(b.playedAt));
   let cursor = 0;
+  let best = 0;
   for (const row of ordered) {
-    if (row.trackId === trackIds[cursor]) {
+    const expected = trackIds[cursor];
+    if (expected && sameTrack(row.trackId, expected)) {
       cursor += 1;
-      if (cursor === trackIds.length) return true;
+      best = Math.max(best, cursor);
+      if (cursor === trackIds.length) return trackIds.length;
       continue;
     }
-    if (cursor > 0) cursor = row.trackId === trackIds[0] ? 1 : 0;
+    if (cursor > 0) {
+      cursor = sameTrack(row.trackId, trackIds[0] ?? "") ? 1 : 0;
+      best = Math.max(best, cursor);
+    }
   }
-  return false;
+  return best;
+}
+
+function sameTrack(a: string, b: string): boolean {
+  if (a === b) return true;
+  const left = foldedTrack(a);
+  const right = foldedTrack(b);
+  if (!left || !right) return false;
+  return left.artist === right.artist && left.title === right.title;
+}
+
+function foldedTrack(id: string): { artist: string; title: string } | null {
+  const parsed = parseEntityId(id);
+  if (!parsed || parsed.kind !== "track" || parsed.parts.length < 2) return null;
+  const artist = parsed.parts[0];
+  if (!artist) return null;
+  return { artist: foldTitle(artist), title: foldTitle(parsed.parts.slice(1).join("/")) };
+}
+
+function foldTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function pack(current: number, target: number): { current: number; target: number; completed: boolean } {
@@ -118,6 +161,8 @@ export function parseObjective(value: unknown): QuestObjective | null {
       type: "social",
       trackId: value.trackId,
       trackName: typeof value.trackName === "string" ? value.trackName : "a friend's track",
+      artistName: typeof value.artistName === "string" ? value.artistName : "",
+      albumName: typeof value.albumName === "string" ? value.albumName : "",
       friendName: typeof value.friendName === "string" ? value.friendName : "a friend",
       friendId: typeof value.friendId === "string" ? value.friendId : "",
     };

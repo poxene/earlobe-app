@@ -14,7 +14,7 @@ type Quest = {
   current: number;
   target: number;
   completedAt: string | null;
-  objective: { type: string };
+  objective: { type: string; artistName?: string; albumName?: string };
 };
 
 export function QuestsPage() {
@@ -71,6 +71,13 @@ export function QuestsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-display text-3xl tracking-wide">{quest.title}</h2>
+                    {quest.objective.type === "social" && (quest.objective.artistName || quest.objective.albumName) ? (
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {quest.objective.artistName ? <span>by {quest.objective.artistName}</span> : null}
+                        {quest.objective.artistName && quest.objective.albumName ? " " : null}
+                        {quest.objective.albumName ? <span>on {quest.objective.albumName}</span> : null}
+                      </p>
+                    ) : null}
                     <p className="mt-1 max-w-xl text-sm text-zinc-300">{quest.description}</p>
                   </div>
                   <p className="text-sm text-gold">+{quest.xpReward} XP</p>
