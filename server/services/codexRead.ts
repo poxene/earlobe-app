@@ -1,4 +1,5 @@
 import { MONSTERS } from "../../src/lib/game/bestiary";
+import { albumHeard } from "../../src/lib/game/quests";
 import { classForFamily } from "../../src/lib/game/classes";
 import { GENRE_FAMILIES } from "../../src/lib/music/normalize";
 import { varietyFor, varietiesFor } from "../../src/lib/game/varieties";
@@ -52,7 +53,7 @@ export async function loadCodex(userId: string) {
       color: classForFamily(row.genre_family).color,
       tracksPlayed: row.tracks_played,
       tracksTotal: row.tracks_total,
-      attuned: row.tracks_total > 0 && row.tracks_played >= row.tracks_total,
+      attuned: albumHeard(row.tracks_played, row.tracks_total),
     })),
     genres: GENRE_FAMILIES.map((family) => {
       const entry = classForFamily(family);

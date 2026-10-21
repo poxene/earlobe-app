@@ -48,6 +48,17 @@ export type AlbumFact = {
   tracksTotal: number;
 };
 
+// A single or a short EP is not an album. Five tracks is the shortest release that can be finished.
+export const MIN_ALBUM_TRACKS = 5;
+
+export function albumHeard(tracksPlayed: number, tracksTotal: number): boolean {
+  return tracksTotal > 0 && tracksPlayed >= tracksTotal;
+}
+
+export function albumFinished(tracksPlayed: number, tracksTotal: number): boolean {
+  return tracksTotal >= MIN_ALBUM_TRACKS && albumHeard(tracksPlayed, tracksTotal);
+}
+
 export function questProgress(
   objective: QuestObjective,
   listens: ListenFact[],
@@ -55,10 +66,7 @@ export function questProgress(
 ): { current: number; target: number; completed: boolean } {
   if (objective.type === "discovery") {
     const done = albums.filter(
-      (album) =>
-        album.tracksTotal > 0 &&
-        album.tracksPlayed >= album.tracksTotal &&
-        objective.families.includes(album.family),
+      (album) => albumFinished(album.tracksPlayed, album.tracksTotal) && objective.families.includes(album.family),
     ).length;
     return pack(done, objective.target);
   }
@@ -73,11 +81,13 @@ export function questProgress(
     return pack(heard ? 1 : 0, 1);
   }
   const reached = ritualReached(objective.trackIds, listens);
-  return pack(reached, objective.trackIds.length || 1);
+  const progress = pack(reached, objective.trackIds.length || 1);
+  if (objective.trackIds.length < MIN_ALBUM_TRACKS) return { ...progress, completed: false };
+  return progress;
 }
 
 export function ritualComplete(trackIds: string[], listens: ListenFact[]): boolean {
-  return trackIds.length > 0 && ritualReached(trackIds, listens) === trackIds.length;
+  return trackIds.length >= MIN_ALBUM_TRACKS && ritualReached(trackIds, listens) === trackIds.length;
 }
 
 export function ritualReached(trackIds: string[], listens: ListenFact[]): number {

@@ -18,6 +18,7 @@ import { echoReward, RARITY_RANK, rollRelic, statBonusPayload, type RelicDraft }
 import { rollMaterialDrops } from "../../src/lib/game/materials";
 import type { HistoryPlay } from "../../src/lib/music/mapHistory";
 import type { NowPlaying } from "../../src/lib/music/provider";
+import { albumFinished, ritualComplete, type ListenFact } from "../../src/lib/game/quests";
 import {
   ESCAPE_CONSOLATION_XP,
   NEW_ARTIST_XP,
@@ -36,7 +37,6 @@ import { albumTrackIds, listenerActivity } from "./listening";
 import { loadBattleAllies, postFeed } from "./party";
 import { ensureQuests, evaluateQuests } from "./questBoard";
 import { listSessionUserIds } from "./lastfmSession";
-import { ritualComplete, type ListenFact } from "../../src/lib/game/quests";
 
 const DAY_MS = 86_400_000;
 const AWAY_MS = 15 * 60 * 1000;
@@ -573,17 +573,17 @@ async function noteAlbum(
     genre_family: play.families[0] ?? "Unmapped",
     tracks_total: total,
     tracks_played: tracks.size,
-    completed_at: total > 0 && tracks.size >= total ? (existing.data?.completed_at ?? new Date().toISOString()) : null,
+    completed_at: albumFinished(tracks.size, total) ? (existing.data?.completed_at ?? new Date().toISOString()) : null,
     xp_awarded: existing.data?.xp_awarded ?? false,
   };
   const saved = await getSupabase().from("codex_albums").upsert(row);
   if (saved.error) throw new Error(saved.error.message);
-  if (!row.xp_awarded && total > 0 && tracks.size >= total) {
+  if (!row.xp_awarded && albumFinished(tracks.size, total)) {
     const ordered = await albumTrackIds(play.albumId);
     const listens: ListenFact[] = heard
       .filter((item) => item.albumId === play.albumId)
       .map((item) => ({ trackId: item.trackId, albumId: item.albumId, artistIds: item.artistIds, playedAt: item.playedAt }));
-    if (ordered.length > 0 && ritualComplete(ordered, listens)) {
+    if (ritualComplete(ordered, listens)) {
       awardXp(hero, ALBUM_COMPLETION_XP, "listening", credit, `${play.albumName} finished. +${ALBUM_COMPLETION_XP} XP`);
       const marked = await getSupabase()
         .from("codex_albums")

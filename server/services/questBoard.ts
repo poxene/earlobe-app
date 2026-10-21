@@ -3,6 +3,7 @@ import { GENRE_FAMILIES } from "../../src/lib/music/normalize";
 import { isRecord } from "../../src/lib/isRecord";
 import { lastfmSearch, lastfmUrl } from "../../src/lib/music/lastfmIds";
 import {
+  MIN_ALBUM_TRACKS,
   parseObjective,
   questProgress,
   type AlbumFact,
@@ -198,7 +199,7 @@ async function createRitual(userId: string, expires: string): Promise<boolean> {
   const album = (recent.data ?? []).find((row) => row.album_id);
   if (!album?.album_id) return false;
   const trackIds = await albumTrackIds(album.album_id);
-  if (trackIds.length < 2) return false;
+  if (trackIds.length < MIN_ALBUM_TRACKS) return false;
   await insertQuest(userId, {
     type: "ritual",
     title: "Full album",
