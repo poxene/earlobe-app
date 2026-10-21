@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { GameError } from "../errors";
 import { getSupabase } from "../supabase";
 
+export const PARTY_LIMIT = 3;
+
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export async function partyIdFor(userId: string): Promise<string | null> {
@@ -118,7 +120,7 @@ export async function joinParty(userId: string, code: string): Promise<void> {
     .select("user_id", { count: "exact", head: true })
     .eq("party_id", party.data.id);
   if (members.error) throw new Error(members.error.message);
-  if ((members.count ?? 0) >= 6) throw new GameError(409, "party_full");
+  if ((members.count ?? 0) >= PARTY_LIMIT) throw new GameError(409, "party_full");
   const joined = await supabase.from("party_members").insert({ party_id: party.data.id, user_id: userId });
   if (joined.error) throw new Error(joined.error.message);
 }
