@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EqualizerBars } from "@/components/EqualizerBars";
@@ -110,6 +110,8 @@ export function TownChat() {
   const [logHeight, setLogHeight] = useState(storedLogHeight);
   const log = useRef<HTMLDivElement>(null);
   const dock = useRef<HTMLDivElement>(null);
+  const chat = useRef<HTMLElement>(null);
+  const [playMin, setPlayMin] = useState(0);
   const drag = useRef<{ y: number; height: number } | null>(null);
   const query = useTown();
   const messages = query.data?.messages ?? [];
@@ -118,6 +120,19 @@ export function TownChat() {
     const next = clampLog(logHeight);
     if (next !== logHeight) setLogHeight(next);
     else localStorage.setItem("earlobe.chatHeight", String(next));
+  }, [logHeight]);
+
+  useLayoutEffect(() => {
+    const node = chat.current;
+    if (!node) return;
+    const apply = () => {
+      const next = Math.ceil(node.getBoundingClientRect().height - (logHeight - MIN_LOG));
+      setPlayMin((current) => (current === next ? current : next));
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [logHeight]);
 
   useEffect(() => {
@@ -178,10 +193,13 @@ export function TownChat() {
 
   return (
     <div ref={dock} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-end gap-2 px-2 pb-2">
-      <div className="pointer-events-auto shrink-0 border border-white/10 bg-ink/95 p-2">
+      <div
+        className="pointer-events-auto flex shrink-0 items-center border border-white/10 bg-ink/95 p-2"
+        style={{ minHeight: playMin > 0 ? playMin : undefined }}
+      >
         <NowPlayingDock />
       </div>
-      <section className="pointer-events-auto flex min-w-0 flex-1 flex-col border border-white/10 bg-ink/95">
+      <section ref={chat} className="pointer-events-auto flex min-w-0 flex-1 flex-col border border-white/10 bg-ink/95">
         <div
           role="slider"
           aria-orientation="vertical"
