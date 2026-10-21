@@ -28,12 +28,12 @@ export type Database = {
         Insert: {
           id: string;
           lastfm_username: string;
-          display_name: string;
+          display_name?: string | null;
           avatar_url?: string | null;
           created_at?: string;
         };
         Update: {
-          display_name?: string;
+          display_name?: string | null;
           avatar_url?: string | null;
         };
         Relationships: [];
@@ -97,7 +97,6 @@ export type Database = {
           legacy_points?: number;
           legacy_awarded?: boolean;
           tree_nodes?: string[];
-          body?: string;
         };
         Update: {
           active_class?: string;

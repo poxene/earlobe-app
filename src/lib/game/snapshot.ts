@@ -14,6 +14,8 @@ export type ActiveFight = {
   progressMs: number;
   echoDepth: number;
   trackName: string;
+  artistName: string;
+  albumName: string;
   trackId: string;
   albumImageUrl: string | null;
   observedAt: number;
@@ -37,6 +39,17 @@ export type BattleRow = {
   at: string;
 };
 
+export type PartyAlly = {
+  userId: string;
+  name: string;
+  className: string;
+  classColor: string;
+  level: number;
+  body: string;
+  gear: (string | null)[];
+  skillId: string;
+};
+
 export type GameToast = { id: string; message: string };
 
 export type AwaySummary = {
@@ -58,4 +71,5 @@ export type GameSnapshot = {
   questCompletions: { title: string; xp: number }[];
   away: AwaySummary | null;
   sheet: CharacterSheetModel;
+  allies: PartyAlly[];
 };

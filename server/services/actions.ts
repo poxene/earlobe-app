@@ -2,6 +2,7 @@ import { classById } from "../../src/lib/game/classes";
 import { parseBody } from "../../src/lib/portrait/body";
 import { DOLL_SLOTS, gearBySlug, gearForSalt, itemFits, slotIndex } from "../../src/lib/portrait/gear";
 import { castSkill, parseCooldowns, skillById, SKILL_COOLDOWN_MS } from "../../src/lib/game/skills";
+import { loadBattleAllies } from "./party";
 import { canSpend, nodeById, purchasable } from "../../src/lib/game/trees";
 import { respec } from "../../src/lib/game/xp";
 import { GameError } from "../errors";
@@ -156,11 +157,21 @@ function applyLearn(hero: Awaited<ReturnType<typeof loadHero>>, skillId: string)
   hero.skillPicks -= 1;
 }
 
-export async function castSkillOnFight(userId: string, skillId: string): Promise<{ name: string; damage: number; readyAt: number }> {
+export async function castSkillOnFight(
+  userId: string,
+  skillId: string,
+  allyId?: string,
+): Promise<{ name: string; damage: number; readyAt: number }> {
   const hero = await loadHero(userId);
   const entry = skillById(skillId);
-  if (!entry || !hero.skills.includes(entry.id)) throw new GameError(409, "skill_unknown");
-  const cooldownKey = entry.id;
+  if (!entry) throw new GameError(409, "skill_unknown");
+  const cooldownKey = allyId ? `${entry.id}:${allyId}` : entry.id;
+  if (allyId) {
+    const ally = (await loadBattleAllies(userId)).find((mate) => mate.userId === allyId);
+    if (!ally || ally.skillId !== entry.id) throw new GameError(409, "skill_unknown");
+  } else if (!hero.skills.includes(entry.id)) {
+    throw new GameError(409, "skill_unknown");
+  }
   const supabase = getSupabase();
   const open = await supabase
     .from("encounters")

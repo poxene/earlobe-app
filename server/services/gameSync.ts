@@ -32,7 +32,7 @@ import { presentCharacter, loadCharacterSheet } from "./characterSheet";
 import { grantMaterials } from "./materials";
 import { awardXp, heroDps, heroStats, loadHero, saveHero, type Credit, type Hero } from "./hero";
 import { albumTrackIds, listenerActivity } from "./listening";
-import { postFeed } from "./party";
+import { loadBattleAllies, postFeed } from "./party";
 import { ensureQuests, evaluateQuests } from "./questBoard";
 import { listSessionUserIds } from "./lastfmSession";
 import { ritualComplete, type ListenFact } from "../../src/lib/game/quests";
@@ -111,6 +111,7 @@ export async function syncListener(userId: string): Promise<GameSnapshot> {
     questCompletions,
     away,
     sheet: await presentCharacter(userId),
+    allies: await loadBattleAllies(userId),
   };
 }
 
@@ -660,6 +661,8 @@ async function activeFight(userId: string, playing: NowPlaying | null): Promise<
     progressMs: playing.progressMs,
     echoDepth: open.echoDepth,
     trackName: open.trackName,
+    artistName: playing.artistNames.filter(Boolean).join(", "),
+    albumName: playing.albumName,
     trackId: open.trackId,
     albumImageUrl: open.image,
     observedAt: Date.now(),

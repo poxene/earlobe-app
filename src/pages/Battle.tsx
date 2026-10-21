@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CombatBars } from "@/components/CombatBars";
 import { GoldAmount } from "@/components/Gold";
+import { ListenerPortrait } from "@/components/portrait/ListenerPortrait";
 import { Frame } from "@/components/Frame";
 import { MonsterFigure } from "@/components/monsters/MonsterFigure";
 import { useGameSync } from "@/hooks/useGameSync";
 import { ApiError, apiSend } from "@/lib/api";
-import type { AlbumCover } from "@/lib/game/character";
-import type { ActiveFight, BattleRow } from "@/lib/game/snapshot";
+import type { RelicView } from "@/lib/game/character";
+import type { ActiveFight, BattleRow, PartyAlly } from "@/lib/game/snapshot";
 import { isRecord } from "@/lib/isRecord";
 import { cooldownLeft, skillById } from "@/lib/game/skills";
 import { varietyFor } from "@/lib/game/varieties";
+import { profilePath } from "@/lib/profile/handle";
 
 export function BattlePage() {
   const sync = useGameSync();
@@ -25,6 +27,13 @@ export function BattlePage() {
         <h1 className="mt-1 text-balance font-display text-5xl leading-none tracking-wide md:text-6xl">
           {fight?.trackName ?? "No fight"}
         </h1>
+        {fight && (fight.artistName || fight.albumName) ? (
+          <p className="mt-2 text-sm text-zinc-400">
+            {fight.artistName ? <span>by {fight.artistName}</span> : null}
+            {fight.artistName && fight.albumName ? " " : null}
+            {fight.albumName ? <span>on {fight.albumName}</span> : null}
+          </p>
+        ) : null}
         {fight && variety && sheet ? (
           <Stage
             fight={fight}
@@ -34,14 +43,19 @@ export function BattlePage() {
             listenerName={sheet.displayName}
             className={sheet.className}
             classColor={sheet.classColor}
-            albums={sheet.albums}
+            level={sheet.level}
+            relics={sheet.relics}
+            body={sheet.body}
+            allies={sync.data?.allies ?? []}
           />
         ) : (
           <p className="mt-6 border border-white/10 bg-panel/80 px-4 py-8 text-center text-sm text-zinc-400">
             Nothing is playing. Start a track to start a fight.
           </p>
         )}
-        {fight && sheet ? <Skills fight={fight} known={sheet.skills} onCast={() => void sync.refetch()} /> : null}
+        {fight && sheet ? (
+          <Skills fight={fight} known={sheet.skills} allies={sync.data?.allies ?? []} onCast={() => void sync.refetch()} />
+        ) : null}
         {fight?.bonusDamage ? (
           <p className="mt-3 text-center text-xs text-zinc-500">{fight.bonusDamage} bonus damage so far.</p>
         ) : null}
@@ -49,7 +63,7 @@ export function BattlePage() {
         <Log rows={sync.data?.battles ?? []} />
         <p className="mt-6 text-center text-xs text-zinc-600">
           <Link to="/" className="underline decoration-white/20 underline-offset-4 hover:text-zinc-300">
-            Back to the sheet
+            Back to the character
           </Link>
         </p>
       </main>
@@ -65,7 +79,10 @@ function Stage({
   listenerName,
   className,
   classColor,
-  albums,
+  level,
+  relics,
+  body,
+  allies,
 }: {
   fight: ActiveFight;
   varietyName: string;
@@ -74,9 +91,11 @@ function Stage({
   listenerName: string;
   className: string;
   classColor: string;
-  albums: AlbumCover[];
+  level: number;
+  relics: (RelicView | null)[];
+  body: string;
+  allies: PartyAlly[];
 }) {
-  const sleeves = Array.from({ length: 4 }, (_, index) => albums[index] ?? null);
   return (
     <section className="relative mt-6 overflow-hidden border border-white/10 bg-panel/90 px-3 py-6 md:px-8">
       <div
@@ -84,37 +103,72 @@ function Stage({
         style={{ background: `radial-gradient(circle at 70% 40%, ${fight.color}33, transparent 55%)` }}
       />
       <div className="relative">
-        <div className="grid grid-cols-2 items-end gap-2">
-          <div className={`mx-auto w-full max-w-[11rem] ${fight.isPlaying ? "listener-on" : ""}`}>
-            <div
-              className="grid aspect-square grid-cols-2 overflow-hidden"
-              style={{ boxShadow: `0 0 28px ${classColor}66` }}
-            >
-              {sleeves.map((album, index) => (
-                <div key={album?.id ?? `empty-${index}`} className="bg-ink">
-                  {album?.imageUrl ? (
-                    <img src={album.imageUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full" style={{ background: `linear-gradient(145deg, ${classColor}, #0a0a0f)` }} />
-                  )}
+        <div className="grid grid-cols-2 items-end gap-4">
+          <div className="min-w-0">
+            <div className={`flex items-end ${allies.length > 0 ? "justify-end" : "justify-center"}`}>
+              {allies.length > 0 ? (
+                <div className="z-0 -mr-5 mb-1 flex items-end">
+                  {allies.map((ally) => (
+                    <div key={ally.userId} className="w-16 sm:w-[4.5rem]">
+                      <Link
+                        to={profilePath(ally.name)}
+                        className="relative z-20 block truncate text-center text-[10px] tracking-wide hover:underline"
+                        style={{ color: ally.classColor }}
+                      >
+                        {ally.name}
+                      </Link>
+                      <ListenerPortrait
+                        color={ally.classColor}
+                        name={ally.name}
+                        relics={ally.gear.map((slug) => (slug ? { gearSlug: slug } : null))}
+                        body={ally.body}
+                        size={68}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
+              <div className="relative z-10 h-[182px] w-[168px] shrink-0">
+                <div className={`absolute inset-0 ${fight.isPlaying ? "listener-on" : ""}`}>
+                  <ListenerPortrait
+                    color={classColor}
+                    name={listenerName}
+                    relics={relics}
+                    body={body}
+                    size={168}
+                    attacking={fight.isPlaying}
+                  />
+                </div>
+              </div>
             </div>
-            <p className="mt-3 truncate text-center font-display text-3xl tracking-wide">{listenerName}</p>
-            <p className="truncate text-center text-xs tracking-[0.16em]" style={{ color: classColor }}>
-              {className.toUpperCase()}
-            </p>
+            <div className={`stage-still ${allies.length > 0 ? "ml-auto w-[168px]" : ""}`}>
+              <Link
+                to={profilePath(listenerName)}
+                className="mt-3 block text-balance text-center font-display text-3xl leading-tight tracking-wide hover:text-gold"
+              >
+                {listenerName}
+              </Link>
+              <p className="text-balance text-center text-xs" style={{ color: classColor }}>
+                Level {level} {className}
+              </p>
+            </div>
           </div>
-          <div className="mx-auto w-full max-w-[12rem]">
-            <div className={`h-56 ${fight.isPlaying ? "creature creature-on" : "creature"}`}>
-              <MonsterFigure recipe={recipe} color={fight.color} echo={fight.echoDepth > 0} title={fight.trackName} />
+          <div className="min-w-0">
+            <div className={fight.isPlaying ? "creature creature-on" : "creature"}>
+              <div className="mx-auto h-56 w-full max-w-[12rem]">
+                <MonsterFigure recipe={recipe} color={fight.color} echo={fight.echoDepth > 0} title={fight.trackName} />
+              </div>
+              <p className="mt-3 text-balance text-center font-display text-3xl leading-tight tracking-wide">{fight.trackName}</p>
+              <p className="text-balance text-center text-xs tracking-[0.16em]" style={{ color: fight.color }}>
+                {varietyName.toUpperCase()}
+              </p>
+              {canon !== varietyName ? (
+                <p className="text-balance text-center text-xs tracking-[0.16em] text-zinc-500">{canon.toUpperCase()}</p>
+              ) : null}
+              {fight.echoDepth > 0 ? (
+                <p className="text-center text-xs tracking-[0.16em] text-zinc-500">ECHO {fight.echoDepth}</p>
+              ) : null}
             </div>
-            <p className="mt-3 truncate text-center font-display text-3xl tracking-wide">{fight.trackName}</p>
-            <p className="truncate text-center text-xs tracking-[0.16em]" style={{ color: fight.color }}>
-              {varietyName.toUpperCase()}
-              {canon !== varietyName ? <span className="text-zinc-500"> · {canon.toUpperCase()}</span> : null}
-              {fight.echoDepth > 0 ? <span className="text-zinc-500"> · ECHO {fight.echoDepth}</span> : null}
-            </p>
           </div>
         </div>
         <div className={`strike ${fight.isPlaying ? "strike-on" : ""}`} style={{ ["--strike" as string]: fight.color }} />
@@ -123,13 +177,27 @@ function Stage({
   );
 }
 
-function Skills({ fight, known, onCast }: { fight: ActiveFight; known: string[]; onCast: () => void }) {
+function Skills({
+  fight,
+  known,
+  allies,
+  onCast,
+}: {
+  fight: ActiveFight;
+  known: string[];
+  allies: PartyAlly[];
+  onCast: () => void;
+}) {
   const [note, setNote] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [localReady, setLocalReady] = useState<Record<string, number>>({});
   const learned = known.flatMap((id) => {
     const entry = skillById(id);
     return entry ? [entry] : [];
+  });
+  const borrowed = allies.flatMap((ally) => {
+    const entry = skillById(ally.skillId);
+    return entry ? [{ ally, entry }] : [];
   });
 
   useEffect(() => {
@@ -141,13 +209,14 @@ function Skills({ fight, known, onCast }: { fight: ActiveFight; known: string[];
     setLocalReady({});
   }, [fight.trackId]);
 
-  async function cast(id: string) {
+  async function cast(id: string, allyId?: string) {
+    const key = allyId ? `${id}:${allyId}` : id;
     try {
-      const body = await apiSend("/api/battle/skill", "POST", { skillId: id });
+      const body = await apiSend("/api/battle/skill", "POST", allyId ? { skillId: id, allyId } : { skillId: id });
       const name = isRecord(body) && typeof body.name === "string" ? body.name : "Skill";
       const damage = isRecord(body) && typeof body.damage === "number" ? body.damage : 0;
       const readyAt = isRecord(body) && typeof body.readyAt === "number" ? body.readyAt : 0;
-      if (readyAt > 0) setLocalReady((current) => ({ ...current, [id]: readyAt }));
+      if (readyAt > 0) setLocalReady((current) => ({ ...current, [key]: readyAt }));
       setNote(`${name} dealt ${damage}.`);
       onCast();
     } catch (error) {
@@ -159,12 +228,12 @@ function Skills({ fight, known, onCast }: { fight: ActiveFight; known: string[];
     }
   }
 
-  if (learned.length === 0) {
+  if (learned.length === 0 && borrowed.length === 0) {
     return (
       <p className="mt-4 text-sm text-zinc-500">
         No skills yet.{" "}
         <Link to="/" className="text-gold">
-          Learn one on the character sheet.
+          Learn one on the character.
         </Link>
       </p>
     );
@@ -172,8 +241,10 @@ function Skills({ fight, known, onCast }: { fight: ActiveFight; known: string[];
 
   return (
     <section className="mt-4">
-      <h2 className="text-[11px] tracking-[0.28em] text-zinc-500">SKILLS</h2>
-      <p className="mt-2 text-sm text-zinc-400">Each skill can be used again after 60 seconds.</p>
+      <p className="text-sm text-zinc-400">Each skill can be used again after 60 seconds.</p>
+      {learned.length > 0 ? (
+      <>
+      <h2 className="mt-3 text-[11px] tracking-[0.28em] text-zinc-500">SKILLS</h2>
       <ul className="mt-2 grid gap-2 sm:grid-cols-3">
         {learned.map((entry) => {
           const readyAt = Math.max(fight.skillCooldowns?.[entry.id] ?? 0, localReady[entry.id] ?? 0);
@@ -196,6 +267,40 @@ function Skills({ fight, known, onCast }: { fight: ActiveFight; known: string[];
           );
         })}
       </ul>
+      </>
+      ) : null}
+      {borrowed.length > 0 ? (
+        <>
+          <h2 className="mt-4 text-[11px] tracking-[0.28em] text-zinc-500">PARTY</h2>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-3">
+            {borrowed.map(({ ally, entry }) => {
+              const key = `${entry.id}:${ally.userId}`;
+              const readyAt = Math.max(fight.skillCooldowns?.[key] ?? 0, localReady[key] ?? 0);
+              const left = cooldownLeft(readyAt, now);
+              const seconds = Math.ceil(left / 1000);
+              return (
+                <li key={ally.userId} className="border border-white/15">
+                  <button
+                    type="button"
+                    disabled={left > 0}
+                    onClick={() => void cast(entry.id, ally.userId)}
+                    className="w-full px-3 py-2 text-left disabled:opacity-40"
+                  >
+                    <span className="text-sm text-zinc-100">{entry.name}</span>
+                    <span className="mt-1 block text-xs text-zinc-500">{seconds > 0 ? `${seconds}s` : entry.detail}</span>
+                  </button>
+                  <p className="px-3 pb-2 text-xs" style={{ color: ally.classColor }}>
+                    <Link to={profilePath(ally.name)} className="hover:underline">
+                      {ally.name}
+                    </Link>
+                    <span> · {ally.className}</span>
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
       {note ? <p className="mt-2 text-sm text-gold">{note}</p> : null}
     </section>
   );

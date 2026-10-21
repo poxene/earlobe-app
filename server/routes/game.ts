@@ -85,7 +85,10 @@ gameRouter.post("/character/skill", (req, res, next) => {
 });
 
 gameRouter.post("/battle/skill", (req, res, next) => {
-  void act(req, res, next, async (userId) => castSkillOnFight(userId, text(req.body, "skillId")));
+  void act(req, res, next, async (userId) => {
+    const allyId = text(req.body, "allyId");
+    return castSkillOnFight(userId, text(req.body, "skillId"), allyId || undefined);
+  });
 });
 
 gameRouter.post("/character/reset", (req, res, next) => {
@@ -175,12 +178,11 @@ function act(
   });
 }
 
-function text(body: unknown, key: string): string {
-  if (!isRecord(body) || typeof body[key] !== "string") return "";
-  return body[key];
+function slotIndex(body: unknown): number | undefined {
+  if (!isRecord(body) || body.slot === undefined) return undefined;
+  if (typeof body.slot !== "number" || !Number.isInteger(body.slot)) throw new GameError(400, "bad_slot");
+  return body.slot;
 }
-
-const STAT_NAMES = ["str", "agi", "int", "wis", "cha"] as const;
 
 function count(body: unknown, key: string): number {
   const value = isRecord(body) ? body[key] : undefined;
@@ -188,11 +190,12 @@ function count(body: unknown, key: string): number {
   return value;
 }
 
-function slotIndex(body: unknown): number | undefined {
-  if (!isRecord(body) || body.slot === undefined) return undefined;
-  if (typeof body.slot !== "number" || !Number.isInteger(body.slot)) throw new GameError(400, "bad_slot");
-  return body.slot;
+function text(body: unknown, key: string): string {
+  if (!isRecord(body) || typeof body[key] !== "string") return "";
+  return body[key];
 }
+
+const STAT_NAMES = ["str", "agi", "int", "wis", "cha"] as const;
 
 function statGrants(body: unknown): Partial<Record<(typeof STAT_NAMES)[number], number>> | null {
   if (!isRecord(body) || !isRecord(body.stats)) return null;

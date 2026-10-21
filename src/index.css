@@ -222,6 +222,19 @@ body::before {
   animation: lunge 1.15s ease-in-out infinite;
 }
 
+.stage-still {
+  position: relative;
+  z-index: 1;
+  transform: none;
+  animation: none;
+}
+
+.weapon-swing {
+  transform-box: view-box;
+  transform-origin: var(--swing-x) var(--swing-y);
+  animation: weapon-swing 1.15s ease-in-out infinite;
+}
+
 .strike-on {
   animation: strike 1.15s ease-in-out infinite;
 }
@@ -235,6 +248,16 @@ body::before {
 @keyframes lunge {
   50% {
     transform: translateX(10px);
+  }
+}
+
+@keyframes weapon-swing {
+  0%,
+  100% {
+    transform: rotate(42deg);
+  }
+  50% {
+    transform: rotate(-88deg);
   }
 }
 
@@ -274,6 +297,7 @@ body::before {
   .creature-on,
   .listener-on,
   .strike-on,
+  .weapon-swing,
   .town-marquee {
     animation: none;
   }
