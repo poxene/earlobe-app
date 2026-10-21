@@ -4,7 +4,7 @@ import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { useGameSync } from "@/hooks/useGameSync";
 import type { NowPlaying } from "@/lib/music/provider";
 
-export function NowPlayingDock() {
+export function NowPlayingDock({ expanded = false }: { expanded?: boolean }) {
   const query = useNowPlaying();
   const sync = useGameSync();
   const fight = sync.data?.fight ?? null;
@@ -15,26 +15,23 @@ export function NowPlayingDock() {
   if (!track) return <Quiet label="QUIET" note="Nothing is playing." />;
 
   const color = fight && fight.trackId === track.trackId ? fight.color : "#d4a24e";
-  return <PlayingTrack track={track} color={color} />;
+  return <PlayingTrack track={track} color={color} expanded={expanded} />;
 }
 
-function PlayingTrack({ track, color }: { track: NowPlaying; color: string }) {
+function PlayingTrack({ track, color, expanded }: { track: NowPlaying; color: string; expanded: boolean }) {
   const progress = useSmoothedProgress(track);
   const fraction = track.durationMs > 0 ? Math.min(1, progress / track.durationMs) : 0;
   const artists = track.artistNames.join(", ");
 
   return (
     <aside className="w-36 shrink-0 self-end sm:w-52">
+      {expanded ? <Cover url={track.albumImageUrl} large /> : null}
       <p className="flex items-center gap-1.5 whitespace-nowrap text-[10px] tracking-[0.14em]" style={{ color }}>
         <EqualizerBars active={track.isPlaying} color={color} />
         {track.isPlaying ? "NOW PLAYING" : "PAUSED"}
       </p>
       <div className="mt-1 flex min-w-0 items-center gap-2">
-        {track.albumImageUrl ? (
-          <img src={track.albumImageUrl} alt="" className="h-8 w-8 shrink-0 object-cover" />
-        ) : (
-          <div className="h-8 w-8 shrink-0 bg-white/5" />
-        )}
+        {expanded ? null : <Cover url={track.albumImageUrl} />}
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs text-zinc-100" title={track.trackName}>
             {track.trackName}
@@ -47,6 +44,12 @@ function PlayingTrack({ track, color }: { track: NowPlaying; color: string }) {
       </div>
     </aside>
   );
+}
+
+function Cover({ url, large = false }: { url: string | null; large?: boolean }) {
+  const frame = large ? "mb-2 aspect-square w-full" : "h-8 w-8 shrink-0";
+  if (!url) return <div className={`${frame} bg-white/5`} />;
+  return <img src={url} alt="" className={`${frame} object-cover`} />;
 }
 
 function Progress({

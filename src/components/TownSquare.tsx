@@ -196,7 +196,7 @@ export function TownChat() {
         <span className="h-1 w-16 rounded-full bg-white/30 transition-colors hover:bg-white/70" />
       </div>
       <div className="flex w-full items-end gap-3 px-3 pb-2">
-        <NowPlayingDock />
+        <NowPlayingDock expanded={logHeight === MAX_LOG} />
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 className="text-[10px] tracking-[0.28em] text-zinc-500">CHAT</h2>
